@@ -1,0 +1,22 @@
+[package]
+name = "sweeper"
+version = "0.1.0"
+authors = ["Kotauskas <v.toncharov@gmail.com>"]
+edition = "2018"
+license = "Zlib"
+repository = "https://github.com/kotauskas/sweeper"
+documentation = "https://docs.rs/sweeper"
+
+readme = "README.md"
+description = "A foundation for Minesweeper implementations in Rust"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rand = {version = "0.7", optional = true, default-features = false, features = ["alloc"]}
+
+[features]
+default = ["std", "generation"]
+std = ["rand/std"]
+generation = ["rand"]
+track_caller = []
