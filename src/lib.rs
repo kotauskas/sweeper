@@ -22,5 +22,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 extern crate alloc;
 
-pub mod field;
+mod field;
 pub use field::*;
+pub mod iter;
+pub use iter::*;
+mod tile;
+pub use tile::*;

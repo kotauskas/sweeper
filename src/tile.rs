@@ -59,6 +59,23 @@ impl Tile {
             _ => false
         }
     }
+    /// Returns the type of flag installed on this tile, or `None` if this tile is open and thus cannot hold a flag.
+    #[inline]
+    pub fn flag_state(self) -> Option<Flag> {
+        match self {
+            Self::ClosedEmpty(flag) => Some(flag),
+            Self::Mine(flag) => Some(flag),
+            _ => None
+        }
+    }
+    /// Returns `true` if the `flag_state` is `Some(Flag::Flagged)`, `false` otherwise.
+    #[inline]
+    pub fn is_flagged(self) -> bool {
+        if let Some(flag) = self.flag_state() {
+            if let Flag::Flagged = flag { true }
+            else { false }
+        } else { false }
+    }
     /// Returns a [`ClickOutcome`][co] from the data known only to this specific tile, or `None` if returning one requires access to the field.
     ///
     /// [co]: enum.ClickOutcome.html "ClickOutcome — the event produced after clicking a tile"
@@ -367,4 +384,11 @@ pub enum ClickOutcome {
     ///
     /// Obtained from a `Mine`.
     Explosion
+}
+impl Default for ClickOutcome {
+    /// Returns the `Nothing` variant.
+    #[inline(always)]
+    fn default() -> Self {
+        Self::Nothing
+    }
 }

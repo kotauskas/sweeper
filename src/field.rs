@@ -2,15 +2,18 @@
 //!
 //! This is the main point of interest for the game — everything happens here. For that reason, this module is the most detailed one.
 
-pub mod iter; pub use iter::*;
-mod tile; pub use tile::*;
-
 use core::{
     ops::{Index, IndexMut},
     num::{NonZeroUsize, NonZeroU8}
 };
 use alloc::{
     vec::Vec
+};
+use crate::{
+    Tile, Flag, ClickOutcome,
+    Clearing, ClearingMut,
+    RowIter, ColumnIter,
+    FieldRowsIter, FieldColumnsIter
 };
 
 /// Represents a playfield.
@@ -73,7 +76,7 @@ impl Field {
     #[must_use = "traversing the entire field is obscenely expensive"]
     pub fn count_open_tiles(&self) -> usize {
         let mut count = 0_usize;
-        for column in self.columns_iter() {
+        for column in self.columns() {
             for tile in column {
                 if tile.is_open() {count += 1};
             }
@@ -84,7 +87,7 @@ impl Field {
     #[must_use = "traversing the entire field is obscenely expensive"]
     pub fn count_closed_tiles(&self) -> usize {
         let mut count = 0_usize;
-        for column in self.columns_iter() {
+        for column in self.columns() {
             for tile in column {
                 if tile.is_closed() {count += 1};
             }
@@ -97,7 +100,7 @@ impl Field {
     #[must_use = "traversing the entire field is obscenely expensive"]
     pub fn tiles_to_open(&self) -> usize {
         let mut count = 0_usize;
-        for column in self.columns_iter() {
+        for column in self.columns() {
             for tile in column {
                 if tile.is_required_to_open() {count += 1};
             }
@@ -187,6 +190,62 @@ impl Field {
             Some(outcome)
         } else {None}
     }
+    /// Performs a chord on the specified tile. Optionally can
+    ///
+    /// Returns the oucomes for all 8 tiles touched.
+    #[allow(clippy::redundant_closure_call)] // This lint shall not be a thing.
+    pub fn chord(&mut self, index: (usize, usize)) -> [ClickOutcome; 8] {
+        let num_mines = self.count_neighboring_mines(index);
+        let mut result = [ClickOutcome::Nothing; 8];
+        if num_mines == 0 {
+            return result; // Short-circuit if we're not in a valid chord position.
+        }
+
+        let mut num_flags = 0_u8;
+        if self[(index.0 - 1, index.1 + 1)].is_flagged() {num_flags += 1}; // Up-left,
+        if self[(index.0    , index.1 + 1)].is_flagged() {num_flags += 1}; // up,
+        if self[(index.0 + 1, index.1 + 1)].is_flagged() {num_flags += 1}; // up-right,
+        if self[(index.0 + 1, index.1    )].is_flagged() {num_flags += 1}; // right,
+        if self[(index.0 + 1, index.1 - 1)].is_flagged() {num_flags += 1}; // down-right,
+        if self[(index.0    , index.1 - 1)].is_flagged() {num_flags += 1}; // down,
+        if self[(index.0 - 1, index.1 - 1)].is_flagged() {num_flags += 1}; // down-left,
+        if self[(index.0 - 1, index.1    )].is_flagged() {num_flags += 1}; // and left.
+
+        if num_flags < num_mines {
+            return result // We can't chord without enough flags.
+        };
+
+        let calc_result = |coords: (usize, usize)| {
+            let tile = self[coords];
+            if !tile.is_flagged() {
+                self.peek(coords).unwrap_or_default()
+            } else {
+                ClickOutcome::Nothing
+            }
+        };
+        result[0] = calc_result((index.0    , index.1 + 1));
+        result[1] = calc_result((index.0 + 1, index.1 + 1));
+        result[2] = calc_result((index.0 + 1, index.1    ));
+        result[3] = calc_result((index.0 + 1, index.1 - 1));
+        result[4] = calc_result((index.0    , index.1 - 1));
+        result[5] = calc_result((index.0 - 1, index.1 - 1));
+        result[6] = calc_result((index.0 - 1, index.1    ));
+        result[7] = calc_result((index.0 - 1, index.1 + 1));
+
+        result
+    }
+    /* TODO This is unfinished.
+    /// Performs a chord on the specified tile recursively,i.e. runs chords for all number tiles which were uncovered from chording.
+    pub fn recursive_chord(&mut self, index: (usize, usize)) {
+        // Similar to the clearing algorithm, we're using a stack frame type here.
+            // The meanings of values are pretty similar to the ones seen there.
+            // The key difference is that the second element is an array for the sake of readability.
+            // The directions are, in this exact order, up-left, up, up-right, right, down-right, down, down-left, left.
+            type StackFrame = ((usize, usize), [bool; 8]);
+            // We're gonna need less recursion depth here.
+            let mut stack = Vec::<StackFrame>::with_capacity(8);
+            let mut stack_top = (index, [true; 8]);
+    }*/
 
     /// Returns an iterator over a single row.
     ///
@@ -205,12 +264,12 @@ impl Field {
 
     /// Returns an iterator over the field's columns.
     #[inline(always)]
-    pub fn rows_iter(&self) -> FieldRowsIter<'_> {
+    pub fn rows(&self) -> FieldRowsIter<'_> {
         FieldRowsIter::new(self)
     }
     /// Returns an iterator over the field's columns.
     #[inline(always)]
-    pub fn columns_iter(&self) -> FieldColumnsIter<'_> {
+    pub fn columns(&self) -> FieldColumnsIter<'_> {
         FieldColumnsIter::new(self)
     }
     /// Returns a `Clearing` on the specified `Field`, or `None` if the location has 1 or more neighboring mines or is out of bounds.

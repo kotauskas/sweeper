@@ -26,14 +26,18 @@ use super::{
 ///
 /// # Usage
 /// ```
-/// # use sweeper::field::{Field, Tile, RowIter};
+/// # use sweeper::{Field, Tile, Flag, RowIter};
+/// # use core::num::NonZeroUsize;
 /// #
-/// let mut field = Field::empty(9, 4); // Create a field to work with
-/// field[(8, 3)] = Tile::Mine(false); // Place a mine (remember that indicies start from 0)
+/// let mut field = Field::empty( // Create a field to work with
+///     NonZeroUsize::new(9).unwrap(),
+///     NonZeroUsize::new(4).unwrap()
+/// );
+/// field[(8, 3)] = Tile::Mine(Flag::NotFlagged); // Place a mine (remember that indicies start from 0)
 /// let mut rowiter = field.row(3); // Create an iterator over the fourth row
 /// let mine_tile = rowiter.nth(8) // Find the nineth element in the row
 ///     .unwrap(); // Get rid of the Option wrap
-/// assert_eq!(mine_tile, Tile::Mine(false)); // It's a mine
+/// assert_eq!(mine_tile, Tile::Mine(Flag::NotFlagged)); // It's a mine
 /// ```
 #[derive(Clone)]
 pub struct RowIter<'f> {
@@ -123,14 +127,18 @@ impl Index<usize> for RowIter<'_> {
 ///
 /// # Usage
 /// ```
-/// # use sweeper::field::{Field, Tile, ColumnIter};
+/// # use sweeper::{Field, Tile, Flag, ColumnIter};
+/// # use core::num::NonZeroUsize;
 /// #
-/// let mut field = Field::empty(9, 8); // Create a field to work with
-/// field[(8, 7)] = Tile::Mine(false); // Place a mine (remember that indicies start from 0)
+/// let mut field = Field::empty( // Create a field to work with
+///     NonZeroUsize::new(9).unwrap(),
+///     NonZeroUsize::new(8).unwrap()
+/// );
+/// field[(8, 7)] = Tile::Mine(Flag::NotFlagged); // Place a mine (remember that indicies start from 0)
 /// let mut columniter = field.column(8); // Create an iterator over the nineth column
 /// let mine_tile = columniter.nth(7) // Find the seventh element in the column
 ///     .unwrap(); // Get rid of the Option wrap
-/// assert_eq!(mine_tile, Tile::Mine(false)); // It's a mine
+/// assert_eq!(mine_tile, Tile::Mine(Flag::NotFlagged)); // It's a mine
 /// ```
 #[derive(Clone)]
 pub struct ColumnIter<'f> {
@@ -211,6 +219,25 @@ impl Index<usize> for ColumnIter<'_> {
 }
 
 /// An iterator over the rows of a field.
+///
+/// # Usage
+/// ```
+/// # use sweeper::{Field, Tile, Flag, FieldRowsIter};
+/// # use core::num::NonZeroUsize;
+/// #
+/// let mut field = Field::empty( // Create a field to work with
+///     NonZeroUsize::new(9).unwrap(),
+///     NonZeroUsize::new(4).unwrap()
+/// );
+/// field[(8, 3)] = Tile::Mine(Flag::NotFlagged); // Place a mine (remember that indicies start from 0)
+/// let mut row_with_mine: Option<usize> = None; // Keep track of our findings using an Option
+/// for (y, mut row) in field.rows().enumerate() { // In each row...
+///     if row.find(|t| t.is_mine()).is_some() { // If the row contains a mine...
+///         row_with_mine = Some(y); //...take the row number out of the loop.
+///     }
+/// }
+/// assert_eq!(row_with_mine, Some(3)); // We indeed have found a mine in the 4th row.
+/// ```
 #[derive(Clone)]
 pub struct FieldRowsIter<'f> {
     field: &'f Field,
@@ -221,7 +248,7 @@ impl<'f> FieldRowsIter<'f> {
     #[inline(always)]
     pub fn new(field: &'f Field) -> Self {
         Self {
-            field, index: 0..field.dimensions.1.get()
+            field, index: 0..field.dimensions().1.get()
         }
     }
 }
@@ -258,6 +285,25 @@ impl<'f> ExactSizeIterator for FieldRowsIter<'f> {
 impl FusedIterator for FieldRowsIter<'_> {}
 
 /// An iterator over the columns of a field.
+///
+///  # Usage
+/// ```
+/// # use sweeper::{Field, Tile, Flag, FieldColumnsIter};
+/// # use core::num::NonZeroUsize;
+/// #
+/// let mut field = Field::empty( // Create a field to work with
+///     NonZeroUsize::new(9).unwrap(),
+///     NonZeroUsize::new(8).unwrap()
+/// );
+/// field[(8, 7)] = Tile::Mine(Flag::NotFlagged); // Place a mine (remember that indicies start from 0)
+/// let mut column_with_mine: Option<usize> = None; // Keep track of our findings using an Option
+/// for (x, mut column) in field.columns().enumerate() { // In each column...
+///     if column.find(|t| t.is_mine()).is_some() { // If the column contains a mine...
+///         column_with_mine = Some(x); //...take the column number out of the loop.
+///     }
+/// }
+/// assert_eq!(column_with_mine, Some(8)); // We indeed have found a mine in the 9th column.
+/// ```
 #[derive(Clone)]
 pub struct FieldColumnsIter<'f> {
     field: &'f Field,
@@ -268,7 +314,7 @@ impl<'f> FieldColumnsIter<'f> {
     #[inline(always)]
     pub fn new(field: &'f Field) -> Self {
         Self {
-            field, index: 0..field.dimensions.0.get()
+            field, index: 0..field.dimensions().0.get()
         }
     }
 }
