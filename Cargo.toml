@@ -1,6 +1,6 @@
 [package]
 name = "sweeper"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Kotauskas <v.toncharov@gmail.com>"]
 edition = "2018"
 license = "Zlib"
@@ -17,7 +17,7 @@ rand = {version = "0.7", optional = true, default-features = false, features = [
 serde = {version = "1.0", optional = true, default-features = false, features = ["derive", "alloc"]}
 
 [features]
-default = ["std", "generation", "serde"]
+default = ["std", "generation", "serialization"]
 std = ["rand/std", "serde/std"]
 generation = ["rand"]
 serialization = ["serde"]
