@@ -4,7 +4,7 @@ use core::{
 #[cfg(feature = "serialization")]
 use serde::{Serialize, Deserialize};
 use super::{
-    Field
+    Field, FieldCoordinates
 };
 
 /// A Minesweeper tile.
@@ -131,22 +131,21 @@ macro_rules! for_every_tile {
         // - The state of the tile on the up, down, left and right directions.
         //   True means we'd like to look there.
         //   False means there's nothing of interest there, meaning that we've either looked there or there's a mine or a tile with a number.
-        type StackFrame = ((usize, usize), (bool, bool, bool, bool));
+        type StackFrame = (FieldCoordinates, [bool; 4]);
         // We're using a heap-based stack imposter instead of the thread stack to avoid
         // overflowing. For large clearings, this will cause minor lag instead of
         // crashing. For smaller ones, this will hardly make a difference at all, since
         // we're preallocating it for a recursion depth of 10.
         let mut stack = Vec::<StackFrame>::with_capacity(10);
         let mut stack_top // Start at the anchor location.
-            = ($anchor_location, (true, true, true, true));
-        stack.push(stack_top);
+            = ($anchor_location, [true; 4]);
         $f($field, stack_top.0); // Invoke the first run.
         loop { // While we haven't emptied the stack...
             let chosen_location
-               = if stack_top .1 .0 {0} // Up,
-            else if stack_top .1 .1 {1} // down,
-            else if stack_top .1 .2 {2} // left,
-            else if stack_top .1 .3 {3} // right.
+               = if stack_top.1[0] {stack_top.1[0] = false; 0} // Up,
+            else if stack_top.1[1] {stack_top.1[1] = false; 1} // down,
+            else if stack_top.1[2] {stack_top.1[2] = false; 2} // left,
+            else if stack_top.1[3] {stack_top.1[3] = false; 3} // right.
             // If we have nowhere to go, return to where we came from.
             else if let Some(new_top) = stack.pop() {
                 stack_top = new_top;
@@ -155,10 +154,10 @@ macro_rules! for_every_tile {
             } else {break};
 
             let location_to_peek // Now find the coordinates which we're about to peek.
-             =    if chosen_location == 0 {(stack_top .0 .0, stack_top .0 .1 + 1)}
-             else if chosen_location == 1 {(stack_top .0 .0, stack_top .0 .1 - 1)}
-             else if chosen_location == 2 {(stack_top .0 .0 - 1, stack_top .0 .1)}
-             else if chosen_location == 3 {(stack_top .0 .0 + 1, stack_top .0 .1)}
+             =    if chosen_location == 0 {[stack_top.0[0], stack_top.0[1] + 1]}
+             else if chosen_location == 1 {[stack_top.0[0], stack_top.0[1] - 1]}
+             else if chosen_location == 2 {[stack_top.0[0] - 1, stack_top.0[1]]}
+             else if chosen_location == 3 {[stack_top.0[0] + 1, stack_top.0[1]]}
              else {unreachable!()};
 
             if let Some(outcome) = $field.peek(location_to_peek) {
@@ -170,7 +169,7 @@ macro_rules! for_every_tile {
                         stack.push(stack_top);
                         // Then we'll set up the stack top for the next iteration.
                         stack_top.0 = location_to_peek;
-                        stack_top.1 = (true, true, true, true);
+                        stack_top.1 = [true; 4];
                         $f($field, stack_top.0); // Run the closure, this is the point of our actions here.
                     },
                     ClickOutcome::Chord
@@ -179,19 +178,12 @@ macro_rules! for_every_tile {
                         if $include_shore {
                             stack.push(stack_top);
                             stack_top.0 = location_to_peek;
-                            stack_top.1 = (true, true, true, true);
+                            stack_top.1 = [true; 4];
                             $f($field, stack_top.0);
                         }
                     }
                 }
             }
-            match chosen_location {
-                0 => stack_top .1 .0 = false,
-                1 => stack_top .1 .1 = false,
-                2 => stack_top .1 .2 = false,
-                3 => stack_top .1 .3 = false,
-                _ => unreachable!(),
-            };
         }
     };
 }
@@ -201,11 +193,11 @@ macro_rules! for_every_tile {
 #[derive(Copy, Clone)]
 pub struct Clearing<'f> {
     field: &'f Field,
-    anchor_location: (usize, usize)
+    anchor_location: FieldCoordinates
 }
 impl<'f> Clearing<'f> {
     /// Returns a `Clearing` on the specified `Field`, or `None` if the location has 1 or more neighboring mines or is out of bounds.
-    pub fn new(field: &'f Field, anchor_location: (usize, usize)) -> Option<Self> {
+    pub fn new(field: &'f Field, anchor_location: FieldCoordinates) -> Option<Self> {
         if field.get(anchor_location).is_some() {
             if field.count_neighboring_mines(anchor_location) > 0 {
                 None
@@ -223,14 +215,14 @@ impl<'f> Clearing<'f> {
     ///
     /// This can be any location inside the clearing. More specifically, the one used during creation is returned.
     #[inline(always)]
-    pub fn anchor_location(self) -> (usize, usize) { self.anchor_location }
+    pub fn anchor_location(self) -> FieldCoordinates { self.anchor_location }
 
     /// Executes the specified closure on every tile inside the clearing. Optionally can include the "shore" (tiles with numbers) as a part of the clearing.
     ///
     /// The closure takes a reference to the field as the first argument and the location of the tile as the second one. No return value is expected.
     #[cfg_attr(feature = "track_caller", track_caller)]
     pub fn for_every_tile<F>(self, include_shore: bool, mut f: F)
-    where F: FnMut(&'f Field, (usize, usize)) {
+    where F: FnMut(&'f Field, FieldCoordinates) {
         for_every_tile!(self.field, self.anchor_location, f, include_shore);
     }
     /// Returns the size of the clearing, in tiles. Optionally can include the "shore" (tiles with numbers) as a part of the clearing.
@@ -245,9 +237,9 @@ impl<'f> Clearing<'f> {
     /// Returns `true` if the given tile is inside the clearing, `false` otherwise. Optionally can include the "shore" (tiles with numbers) as a part of the clearing.
     #[cfg_attr(feature = "track_caller", track_caller)]
     #[must_use = "fully traversing a clearing is an expensive operation involving memory allocation"]
-    pub fn includes(self, index: (usize, usize), include_shore: bool) -> bool {
+    pub fn includes(self, coordinates: FieldCoordinates, include_shore: bool) -> bool {
         let mut includes = false;
-        self.for_every_tile(include_shore, |_, here| if here == index {includes = true});
+        self.for_every_tile(include_shore, |_, here| if here == coordinates {includes = true});
         includes
     }
 }
@@ -256,11 +248,11 @@ impl<'f> Clearing<'f> {
 /// This is merely a **mutable** reference to the area on a field which is known to be clear land. Nothing is owned by this structure.
 pub struct ClearingMut<'f> {
     field: &'f mut Field,
-    anchor_location: (usize, usize)
+    anchor_location: FieldCoordinates
 }
 impl<'f> ClearingMut<'f> {
     /// Returns a `ClearingMut` on the specified `Field`, or `None` if the location has 1 or more neighboring mines or is out of bounds.
-    pub fn new(field: &'f mut Field, anchor_location: (usize, usize)) -> Option<Self> {
+    pub fn new(field: &'f mut Field, anchor_location: FieldCoordinates) -> Option<Self> {
         if field.get(anchor_location).is_some() {
             if field.count_neighboring_mines(anchor_location) > 0 {
                 None
@@ -278,7 +270,7 @@ impl<'f> ClearingMut<'f> {
     ///
     /// This can be any location inside the clearing. More specifically, the one used during creation is returned.
     #[inline(always)]
-    pub fn anchor_location(self) -> (usize, usize) { self.anchor_location }
+    pub fn anchor_location(self) -> FieldCoordinates { self.anchor_location }
 
     /// Executes the specified closure on every tile inside the clearing. Optionally can include the "shore" (tiles with numbers) as a part of the clearing.
     ///
@@ -287,7 +279,7 @@ impl<'f> ClearingMut<'f> {
     /// This is a version of `for_every_tile_mut` which doesn't allow mutating the field.
     #[cfg_attr(feature = "track_caller", track_caller)]
     pub fn for_every_tile<F>(self, include_shore: bool, mut f: F)
-    where F: FnMut(&'f Field, (usize, usize)) {
+    where F: FnMut(&'f Field, FieldCoordinates) {
         for_every_tile!(self.field, self.anchor_location, f, include_shore);
     }
     /// Executes the specified closure on every tile inside the clearing. Optionally can include the "shore" (tiles with numbers) as a part of the clearing.
@@ -295,7 +287,7 @@ impl<'f> ClearingMut<'f> {
     /// The closure takes a **mutable** reference to the field as the first argument and the location of the tile as the second one. No return value is expected.
     #[cfg_attr(feature = "track_caller", track_caller)]
     pub fn for_every_tile_mut<F>(self, include_shore: bool, mut f: F)
-    where F: FnMut(&mut Field, (usize, usize)) {
+    where F: FnMut(&mut Field, FieldCoordinates) {
         for_every_tile!(self.field, self.anchor_location, f, include_shore);
     }
     /// Returns the size of the clearing, in tiles. Optionally can include the "shore" (tiles with numbers) as a part of the clearing.
@@ -314,9 +306,9 @@ impl<'f> ClearingMut<'f> {
     /// Returns `true` if the given tile is inside the clearing, `false` otherwise. Optionally can include the "shore" (tiles with numbers) as a part of the clearing.
     #[cfg_attr(feature = "track_caller", track_caller)]
     #[must_use = "fully traversing a clearing is an expensive operation involving memory allocation"]
-    pub fn includes(self, index: (usize, usize), include_shore: bool) -> bool {
+    pub fn includes(self, coordinates: FieldCoordinates, include_shore: bool) -> bool {
         let mut includes = false;
-        self.for_every_tile(include_shore, |_, here| if here == index {includes = true});
+        self.for_every_tile(include_shore, |_, here| if here == coordinates {includes = true});
         includes
     }
     /// Fully opens the clearing on the field and returns the amount of tiles opened. Optionally can include the "shore" (tiles with numbers) as a part of the clearing.

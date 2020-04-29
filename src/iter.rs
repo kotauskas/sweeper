@@ -29,11 +29,11 @@ use super::{
 /// # use sweeper::{Field, Tile, Flag, RowIter};
 /// # use core::num::NonZeroUsize;
 /// #
-/// let mut field = Field::empty( // Create a field to work with
+/// let mut field = Field::empty([ // Create a field to work with
 ///     NonZeroUsize::new(9).unwrap(),
 ///     NonZeroUsize::new(4).unwrap()
-/// );
-/// field[(8, 3)] = Tile::Mine(Flag::NotFlagged); // Place a mine (remember that indicies start from 0)
+/// ]);
+/// field[[8, 3]] = Tile::Mine(Flag::NotFlagged); // Place a mine (remember that indicies start from 0)
 /// let mut rowiter = field.row(3); // Create an iterator over the fourth row
 /// let mine_tile = rowiter.nth(8) // Find the nineth element in the row
 ///     .unwrap(); // Get rid of the Option wrap
@@ -47,14 +47,18 @@ pub struct RowIter<'f> {
 }
 impl<'f> RowIter<'f> {
     /// Creates an iterator over the specified row of the specified field.
+    ///
+    /// # Panics
+    /// Panics if the specified row is out of range.
     #[inline(always)]
     pub fn new(field: &'f Field, row: usize) -> Self {
-        Self {field, row, index: 0..field.dimensions().0.get()}
+        assert!(row < field.dimensions()[1].get());
+        Self {field, row, index: 0..field.dimensions()[0].get()}
     }
     /// Returns the tile at the specified column, or `None` if such a column doesn't exist. The row for which the iterator was created is used.
     #[inline(always)]
     pub fn get(&self, column: usize) -> Option<Tile> {
-        self.field.get((column, self.row)).copied()
+        self.field.get([column, self.row]).copied()
     }
     /// Returns the tile at the specified column.
     ///
@@ -76,7 +80,7 @@ impl<'f> Iterator for RowIter<'f> {
         if self.index.end - self.index.start == 0 {
             return None;
         }
-        let el = self.field.get((self.index.start, self.row));
+        let el = self.field.get([self.index.start, self.row]);
         self.index.start += 1;
         el.copied()
     }
@@ -94,7 +98,7 @@ impl<'f> DoubleEndedIterator for RowIter<'f> {
             return None;
         }
         self.index.end -= 1;
-        self.field.get((self.index.end, self.row)).copied()
+        self.field.get([self.index.end, self.row]).copied()
     }
 }
 impl<'f> ExactSizeIterator for RowIter<'f> {
@@ -116,7 +120,7 @@ impl Index<usize> for RowIter<'_> {
     /// [0]: #method.column.html "column — returns the tile at the specified column"
     #[inline(always)]
     fn index(&self, column: usize) -> &Tile {
-        self.field.get((column, self.row)).expect("index out of bounds")
+        self.field.get([column, self.row]).expect("index out of bounds")
     }
 }
 
@@ -129,11 +133,11 @@ impl Index<usize> for RowIter<'_> {
 /// # use sweeper::{Field, Tile, Flag, ColumnIter};
 /// # use core::num::NonZeroUsize;
 /// #
-/// let mut field = Field::empty( // Create a field to work with
+/// let mut field = Field::empty([ // Create a field to work with
 ///     NonZeroUsize::new(9).unwrap(),
 ///     NonZeroUsize::new(8).unwrap()
-/// );
-/// field[(8, 7)] = Tile::Mine(Flag::NotFlagged); // Place a mine (remember that indicies start from 0)
+/// ]);
+/// field[[8, 7]] = Tile::Mine(Flag::NotFlagged); // Place a mine (remember that indicies start from 0)
 /// let mut columniter = field.column(8); // Create an iterator over the nineth column
 /// let mine_tile = columniter.nth(7) // Find the seventh element in the column
 ///     .unwrap(); // Get rid of the Option wrap
@@ -147,14 +151,18 @@ pub struct ColumnIter<'f> {
 }
 impl<'f> ColumnIter<'f> {
     /// Creates an iterator over the specified column of the specified field.
+    ///
+    /// # Panics
+    /// Panics if the specified row is out of range.
     #[inline(always)]
     pub fn new(field: &'f Field, column: usize) -> Self {
-        Self {field, column, index: 0..field.dimensions().0.get()}
+        assert!(column < field.dimensions()[0].get());
+        Self {field, column, index: 0..field.dimensions()[0].get()}
     }
     /// Returns the tile at the specified row, or `None` if such a row doesn't exist. The column for which the iterator was created is used.
     #[inline(always)]
     pub fn get(&self, row: usize) -> Option<Tile> {
-        self.field.get((self.column, row)).copied()
+        self.field.get([self.column, row]).copied()
     }
     /// Returns the tile at the specified row.
     ///
@@ -176,7 +184,7 @@ impl<'f> Iterator for ColumnIter<'f> {
         if self.len() == 0 {
             return None;
         }
-        let el = self.field.get((self.column, self.index.start));
+        let el = self.field.get([self.column, self.index.start]);
         self.index.start += 1;
         el.copied()
     }
@@ -191,7 +199,7 @@ impl<'f> DoubleEndedIterator for ColumnIter<'f> {
             return None;
         }
         self.index.end -= 1;
-        self.field.get((self.column, self.index.end)).copied()
+        self.field.get([self.column, self.index.end]).copied()
     }
 }
 impl<'f> ExactSizeIterator for ColumnIter<'f> {
@@ -212,7 +220,7 @@ impl Index<usize> for ColumnIter<'_> {
     /// [0]: #method.row.html "row — returns the tile at the specified row"
     #[inline(always)]
     fn index(&self, row: usize) -> &Tile {
-        self.field.get((self.column, row)).expect("index out of bounds")
+        self.field.get([self.column, row]).expect("index out of bounds")
     }
 }
 
@@ -223,11 +231,11 @@ impl Index<usize> for ColumnIter<'_> {
 /// # use sweeper::{Field, Tile, Flag, FieldRowsIter};
 /// # use core::num::NonZeroUsize;
 /// #
-/// let mut field = Field::empty( // Create a field to work with
+/// let mut field = Field::empty([ // Create a field to work with
 ///     NonZeroUsize::new(9).unwrap(),
 ///     NonZeroUsize::new(4).unwrap()
-/// );
-/// field[(8, 3)] = Tile::Mine(Flag::NotFlagged); // Place a mine (remember that indicies start from 0)
+/// ]);
+/// field[[8, 3]] = Tile::Mine(Flag::NotFlagged); // Place a mine (remember that indicies start from 0)
 /// let mut row_with_mine: Option<usize> = None; // Keep track of our findings using an Option
 /// for (y, mut row) in field.rows().enumerate() { // In each row...
 ///     if row.find(|t| t.is_mine()).is_some() { // If the row contains a mine...
@@ -246,7 +254,7 @@ impl<'f> FieldRowsIter<'f> {
     #[inline(always)]
     pub fn new(field: &'f Field) -> Self {
         Self {
-            field, index: 0..field.dimensions().1.get()
+            field, index: 0..field.dimensions()[1].get()
         }
     }
 }
@@ -289,11 +297,11 @@ impl FusedIterator for FieldRowsIter<'_> {}
 /// # use sweeper::{Field, Tile, Flag, FieldColumnsIter};
 /// # use core::num::NonZeroUsize;
 /// #
-/// let mut field = Field::empty( // Create a field to work with
+/// let mut field = Field::empty([ // Create a field to work with
 ///     NonZeroUsize::new(9).unwrap(),
 ///     NonZeroUsize::new(8).unwrap()
-/// );
-/// field[(8, 7)] = Tile::Mine(Flag::NotFlagged); // Place a mine (remember that indicies start from 0)
+/// ]);
+/// field[[8, 7]] = Tile::Mine(Flag::NotFlagged); // Place a mine (remember that indicies start from 0)
 /// let mut column_with_mine: Option<usize> = None; // Keep track of our findings using an Option
 /// for (x, mut column) in field.columns().enumerate() { // In each column...
 ///     if column.find(|t| t.is_mine()).is_some() { // If the column contains a mine...
@@ -312,7 +320,7 @@ impl<'f> FieldColumnsIter<'f> {
     #[inline(always)]
     pub fn new(field: &'f Field) -> Self {
         Self {
-            field, index: 0..field.dimensions().0.get()
+            field, index: 0..field.dimensions()[0].get()
         }
     }
 }

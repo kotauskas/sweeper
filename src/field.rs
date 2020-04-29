@@ -22,30 +22,48 @@ use crate::{
 #[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
 pub struct Field {
     storage: Vec<Tile>,
-    dimensions: (NonZeroUsize, NonZeroUsize)
+    dimensions: FieldDimensions
 }
+/// The dimensions of a field.
+///
+/// The first element specifies the width (the number of columns), while the second one specifies the height (number of rows). As required by `NonZeroUsize`, a field cannot be smaller than 1x1.
+pub type FieldDimensions = [NonZeroUsize; 2];
+/// The coordinates of a tile on a field.
+///
+/// The first element specifies the column index (X coordinate), while the second one specifies the row index (Y coordinate). This is different from `FieldDimensions`, since the coordinate system starts from zero, i.e. the coordinates `[0, 0]` correspond to the top left corner and the only tile of a 1x1 field.
+pub type FieldCoordinates = [usize; 2];
+/// The outcome of a chord operation.
+///
+/// The entries are the adjacent & diagonal tiles in clockwise order, starting from top-left: ↖, ↑, ↗, →, ↘, ↓, ↙, ←.
+pub type ChordOutcome = [ClickOutcome; 8];
+/// The outcome of one of the chords in a recursive chord operation.
+///
+/// The `Chord` variant of `ClickOutcome` does **not** require any processing — all chords reported by these have already been executed by the time the function finishes execution.
+pub type RecursiveChordOutcome = (FieldCoordinates, ChordOutcome);
 impl Field {
     /// Creates an empty field filled with unopened tiles, with the given dimensions.
     #[inline]
     #[must_use = "this performs a memory allocation as big as the area of the field"]
-    pub fn empty(width: NonZeroUsize, height: NonZeroUsize) -> Self {
-        assert!(height.get() > 0);
-        assert!(width.get()  > 0);
+    pub fn empty(dimensions: FieldDimensions) -> Self {
+        let (width, height) = (dimensions[0].get(), dimensions[1].get());
         let mut tfield = Self {
-            storage: Vec::with_capacity(width.get() * height.get()),
-            dimensions: (width, height)
+            storage: Vec::with_capacity(width * height),
+            dimensions
         };
-        for _ in 0..(width.get() * height.get()) {
+        for _ in 0..(width * height) {
             tfield.storage.push(Tile::default());
         }
         tfield
     }
     /// Adds mines with the selected percentage of mines and, optionally, a safe spot, which can never have any surrounding mines.
     #[cfg(feature = "generation")]
-    pub fn populate(&mut self, mine_percentage: f64, safe_spot: Option<(usize, usize)>) {
+    pub fn populate(&mut self, mine_percentage: f64, safe_spot: Option<FieldCoordinates>) {
         use rand::Rng;
         let mut rng = rand::thread_rng();
-        let area = self.dimensions.0.get() * self.dimensions.1.get();
+
+        let (width, height) = (self.dimensions[0].get(), self.dimensions[1].get());
+
+        let area = width * height;
         let num_mines: usize = (area as f64 * mine_percentage).round() as usize; // The number of mines is usize because the area is usize.
 
         // We're using loop+counter instead of a range because we don't want to just discard a mine if it collides with the safe spot. Instead, we're going to
@@ -54,7 +72,7 @@ impl Field {
         let mut mines_left = num_mines;
         loop {
             let rnum: usize = rng.gen_range(0, area);
-            let mine_location = (rnum % self.dimensions.0.get(), rnum / self.dimensions.0.get());
+            let mine_location = [rnum % width, rnum / width];
             if let Some(spot) = safe_spot {
                 if mine_location == spot {
                     continue; // Jumps over the decrement.
@@ -67,7 +85,7 @@ impl Field {
     }
     /// Returns the width and height of the field.
     #[inline(always)]
-    pub const fn dimensions(&self) -> (NonZeroUsize, NonZeroUsize) {
+    pub const fn dimensions(&self) -> FieldDimensions {
         self.dimensions
     }
     /// Returns `true` if the field is fully solved (game win condition), `false` otherwise.
@@ -114,25 +132,27 @@ impl Field {
     ///
     /// All directly and diagonally adjacent mines are considered neighboring. If the tile is a mine, the tile itself isn't counted.
     #[must_use = "this is a rather complex lookup with 16 branch points"]
-    pub fn count_neighboring_mines(&self, location: (usize, usize)) -> u8 {
+    pub fn count_neighboring_mines(&self, location: FieldCoordinates) -> u8 {
         let mut count = 0_u8;
-        if let Some(b) = self.is_mine((location.0 - 1, location.1 + 1)) {if b {count += 1;}};
-        if let Some(b) = self.is_mine((location.0    , location.1 + 1)) {if b {count += 1;}};
-        if let Some(b) = self.is_mine((location.0 + 1, location.1 + 1)) {if b {count += 1;}};
+        if let Some(b) = self.is_mine([location[0] - 1, location[1] + 1]) {if b {count += 1;}};
+        if let Some(b) = self.is_mine([location[0]    , location[1] + 1]) {if b {count += 1;}};
+        if let Some(b) = self.is_mine([location[0] + 1, location[1] + 1]) {if b {count += 1;}};
 
-        if let Some(b) = self.is_mine((location.0 - 1, location.1    )) {if b {count += 1;}};
+        if let Some(b) = self.is_mine([location[0] - 1, location[1]    ]) {if b {count += 1;}};
         // Skip center
-        if let Some(b) = self.is_mine((location.0 + 1, location.1    )) {if b {count += 1;}};
+        if let Some(b) = self.is_mine([location[0] + 1, location[1]    ]) {if b {count += 1;}};
 
-        if let Some(b) = self.is_mine((location.0 - 1, location.1 - 1)) {if b {count += 1;}};
-        if let Some(b) = self.is_mine((location.0    , location.1 - 1)) {if b {count += 1;}};
-        if let Some(b) = self.is_mine((location.0 + 1, location.1 - 1)) {if b {count += 1;}};
+        if let Some(b) = self.is_mine([location[0] - 1, location[1] - 1]) {if b {count += 1;}};
+        if let Some(b) = self.is_mine([location[0]    , location[1] - 1]) {if b {count += 1;}};
+        if let Some(b) = self.is_mine([location[0] + 1, location[1] - 1]) {if b {count += 1;}};
         count
     }
     /// Detects whether a location is a mine, or `None` if it's out of bounds.
     #[inline]
-    pub fn is_mine(&self, location: (usize, usize)) -> Option<bool> {
-        if location.0 > self.dimensions.0.get() || location.1 > self.dimensions.1.get() {
+    pub fn is_mine(&self, location: FieldCoordinates) -> Option<bool> {
+        let (width, height) = (self.dimensions[0].get(), self.dimensions[1].get());
+
+        if location[0] > width || location[1] > height {
             return None;
         }
         let tile = self[location];
@@ -145,31 +165,37 @@ impl Field {
     ///
     /// This is the immutable version of `get_mut`.
     #[inline]
-    pub fn get(&self, index: (usize, usize)) -> Option<&Tile> {
-        if index.0 > self.dimensions.0.get() || index.1 > self.dimensions.1.get() {return None};
+    pub fn get(&self, coordinates: FieldCoordinates) -> Option<&Tile> {
+        let (width, height) = (self.dimensions[0].get(), self.dimensions[1].get());
+        let (x, y) = (coordinates[0], coordinates[1]);
+
+        if x > width || y > height {return None};
         Some(unsafe{self.storage.get_unchecked(
-              index.0
-            + index.1 * self.dimensions.0.get()
+              x
+            + y * width
         )})
     }
     /// Returns a mutable reference to the tile at the column `index.0` and row `index.1`, both starting at zero, or `None` if the index is out of bounds.
     ///
     /// This is the mutable version of `get`.
     #[inline]
-    pub fn get_mut(&mut self, index: (usize, usize)) -> Option<&mut Tile> {
-        if index.0 > self.dimensions.0.get() || index.1 > self.dimensions.1.get() {return None};
+    pub fn get_mut(&mut self, coordinates: FieldCoordinates) -> Option<&mut Tile> {
+        let (width, height) = (self.dimensions[0].get(), self.dimensions[1].get());
+        let (x, y) = (coordinates[0], coordinates[1]);
+
+        if x > width || y > height {return None};
         Some(unsafe{self.storage.get_unchecked_mut(
-            index.0
-          + index.1 * self.dimensions.0.get()
+            x
+          + y * width
         )})
     }
     /// Returns the outcome of clicking the specified tile **without affecting the field**, or `None` if the index is out of bounds.
-    pub fn peek(&self, index: (usize, usize)) -> Option<ClickOutcome> {
-        if let Some(tile) = self.get(index) {
+    pub fn peek(&self, coordinates: FieldCoordinates) -> Option<ClickOutcome> {
+        if let Some(tile) = self.get(coordinates) {
             if let Some(outcome) = tile.peek_local() {
                 Some(outcome)
             } else {
-                let neighbors = self.count_neighboring_mines(index);
+                let neighbors = self.count_neighboring_mines(coordinates);
                 if neighbors > 0 {
                     Some(ClickOutcome::OpenNumber( unsafe {
                         NonZeroU8::new_unchecked(neighbors)
@@ -183,76 +209,132 @@ impl Field {
     /// Opens **exactly one** tile and returns the outcome of clicking it. **Chords and clearings are not handled** and must be executed manually.
     ///
     /// Essentially, this replaces a `ClosedEmpty` tile with either an `OpenEmpty` or an `OpenNumber` tile.
-    pub fn open(&mut self, index: (usize, usize)) -> Option<ClickOutcome> {
-        if let Some(outcome) = self.peek(index) {
+    pub fn open(&mut self, coordinates: FieldCoordinates) -> Option<ClickOutcome> {
+        if let Some(outcome) = self.peek(coordinates) {
             match outcome {
-                ClickOutcome::OpenClearing => self[index] = Tile::OpenEmpty,
-                ClickOutcome::OpenNumber(num) => self[index] = Tile::OpenNumber(num),
+                ClickOutcome::OpenClearing => self[coordinates] = Tile::OpenEmpty,
+                ClickOutcome::OpenNumber(num) => self[coordinates] = Tile::OpenNumber(num),
                 _ => {}
             };
             Some(outcome)
         } else {None}
     }
-    /// Performs a chord on the specified tile. Optionally can
+    /// Performs a chord on the specified tile.
     ///
     /// Returns the oucomes for all 8 tiles touched.
     #[allow(clippy::redundant_closure_call)] // This lint shall not be a thing.
-    pub fn chord(&mut self, index: (usize, usize)) -> [ClickOutcome; 8] {
-        let num_mines = self.count_neighboring_mines(index);
+    pub fn chord(&mut self, coordinates: FieldCoordinates) -> ChordOutcome {
+        let (x, y) = (coordinates[0], coordinates[1]);
+
+        let num_mines = self.count_neighboring_mines(coordinates);
         let mut result = [ClickOutcome::Nothing; 8];
         if num_mines == 0 {
             return result; // Short-circuit if we're not in a valid chord position.
         }
 
         let mut num_flags = 0_u8;
-        if self[(index.0 - 1, index.1 + 1)].is_flagged() {num_flags += 1}; // Up-left,
-        if self[(index.0    , index.1 + 1)].is_flagged() {num_flags += 1}; // up,
-        if self[(index.0 + 1, index.1 + 1)].is_flagged() {num_flags += 1}; // up-right,
-        if self[(index.0 + 1, index.1    )].is_flagged() {num_flags += 1}; // right,
-        if self[(index.0 + 1, index.1 - 1)].is_flagged() {num_flags += 1}; // down-right,
-        if self[(index.0    , index.1 - 1)].is_flagged() {num_flags += 1}; // down,
-        if self[(index.0 - 1, index.1 - 1)].is_flagged() {num_flags += 1}; // down-left,
-        if self[(index.0 - 1, index.1    )].is_flagged() {num_flags += 1}; // and left.
+        let mut ckflag = |coords: FieldCoordinates| {
+            if let Some(tile) = self.get(coords) {
+                if tile.is_flagged() {
+                    num_flags += 1;
+                }
+            }
+        };
+        ckflag([x - 1, y + 1]); // Up-left,
+        ckflag([x    , y + 1]); // up,
+        ckflag([x + 1, y + 1]); // up-right,
+        ckflag([x + 1, y    ]); // right,
+        ckflag([x + 1, y - 1]); // down-right,
+        ckflag([x    , y - 1]); // down,
+        ckflag([x - 1, y - 1]); // down-left,
+        ckflag([x - 1, y    ]); // and left.
 
         if num_flags < num_mines {
             return result // We can't chord without enough flags.
         };
 
-        let calc_result = |coords: (usize, usize)| {
-            let tile = self[coords];
-            if !tile.is_flagged() {
+        let calc_result = |coords: FieldCoordinates| {
+            if let Some(tile) = self.get(coords) {
+                if !tile.is_flagged() {
                 self.peek(coords).unwrap_or_default()
+                } else {
+                    ClickOutcome::Nothing
+                }
             } else {
                 ClickOutcome::Nothing
             }
         };
-        result[0] = calc_result((index.0    , index.1 + 1));
-        result[1] = calc_result((index.0 + 1, index.1 + 1));
-        result[2] = calc_result((index.0 + 1, index.1    ));
-        result[3] = calc_result((index.0 + 1, index.1 - 1));
-        result[4] = calc_result((index.0    , index.1 - 1));
-        result[5] = calc_result((index.0 - 1, index.1 - 1));
-        result[6] = calc_result((index.0 - 1, index.1    ));
-        result[7] = calc_result((index.0 - 1, index.1 + 1));
+        result[0] = calc_result([x    , y + 1]);
+        result[1] = calc_result([x + 1, y + 1]);
+        result[2] = calc_result([x + 1, y    ]);
+        result[3] = calc_result([x + 1, y - 1]);
+        result[4] = calc_result([x    , y - 1]);
+        result[5] = calc_result([x - 1, y - 1]);
+        result[6] = calc_result([x - 1, y    ]);
+        result[7] = calc_result([x - 1, y + 1]);
 
         result
     }
-    /* TODO This is unfinished.
-    /// Performs a chord on the specified tile recursively,i.e. runs chords for all number tiles which were uncovered from chording.
-    pub fn recursive_chord(&mut self, index: (usize, usize)) {
+    // TODO This is unfinished.
+    /// Performs a chord on the specified tile recursively, i.e. runs chords for all number tiles which were uncovered from chording.
+    ///
+    /// The returned value contains one entry per chord operation
+    pub fn recursive_chord(&mut self, index: FieldCoordinates) -> Vec<RecursiveChordOutcome> {
         // Similar to the clearing algorithm, we're using a stack frame type here.
-            // The meanings of values are pretty similar to the ones seen there.
-            // The key difference is that the second element is an array for the sake of readability.
-            // The directions are, in this exact order, up-left, up, up-right, right, down-right, down, down-left, left.
-            type StackFrame = ((usize, usize), [bool; 8]);
-            // We're gonna need less recursion depth here.
-            let mut stack = Vec::<StackFrame>::with_capacity(8);
-            let mut stack_top = (index, [true; 8]);
-    }*/
+        // The meanings of values are pretty similar to the ones seen there.
+        // The key difference is that the second element is an array for the sake of readability.
+        // The directions are, in this exact order, up-left, up, up-right, right, down-right, down, down-left, left.
+        type StackFrame = (FieldCoordinates, [bool; 8]);
+        // We're gonna need less recursion depth here.
+        let mut stack = Vec::<StackFrame>::with_capacity(8);
+        let mut stack_top = (index, [true; 8]);
+
+        // The return value will be stored as a Vec of all the chord outcomes coupled with the coordinates at which they occurred.
+        let mut chord_outcomes = Vec::<RecursiveChordOutcome>::with_capacity(8);
+        loop {
+            let chosen_location =
+                 if stack_top.1[0] {stack_top.1[0] = false; 0}
+            else if stack_top.1[1] {stack_top.1[1] = false; 1}
+            else if stack_top.1[2] {stack_top.1[2] = false; 2}
+            else if stack_top.1[3] {stack_top.1[3] = false; 3}
+            else if stack_top.1[4] {stack_top.1[4] = false; 4}
+            else if stack_top.1[5] {stack_top.1[5] = false; 5}
+            else if stack_top.1[6] {stack_top.1[6] = false; 6}
+            else if stack_top.1[7] {stack_top.1[7] = false; 7}
+            else if let Some(new_top) = stack.pop() {
+                stack_top = new_top;
+                continue;
+            } else {break};
+
+            let location_to_chord = match chosen_location {
+                0 => [stack_top.0[0] - 1, stack_top.0[1] + 1], // Up & left,
+                1 => [stack_top.0[0]    , stack_top.0[1] + 1], // up,
+                2 => [stack_top.0[0] + 1, stack_top.0[1] + 1], // up & right,
+                3 => [stack_top.0[0] + 1, stack_top.0[1]    ], // right,
+                4 => [stack_top.0[0] + 1, stack_top.0[1] - 1], // down & right,
+                5 => [stack_top.0[0]    , stack_top.0[1] - 1], // down,
+                6 => [stack_top.0[0] - 1, stack_top.0[1] - 1], // down & left,
+                7 => [stack_top.0[0] - 1, stack_top.0[1]    ], // and left.
+                _ => unreachable!()
+            };
+
+            let outcome = self.chord(location_to_chord);
+            chord_outcomes.push((location_to_chord, outcome));
+            if !(outcome == [ClickOutcome::Nothing; 8]) {
+                stack.push(stack_top);
+                stack_top = (location_to_chord, [true; 8]);
+                continue;
+            }
+        };
+        chord_outcomes
+    }
 
     /// Returns an iterator over a single row.
     ///
     /// Said iterator can then also be indexed, thus serving as a versatile reference to a specific row.
+    ///
+    /// # Panics
+    /// Panics if the specified row is out of range.
     #[inline(always)]
     pub fn row(&self, row: usize) -> RowIter<'_> {
         RowIter::new(self, row)
@@ -260,6 +342,9 @@ impl Field {
     /// Returns an iterator over a single column.
     ///
     /// Said iterator can then also be indexed, thus serving as a versatile reference to a specific column.
+    ///
+    /// # Panics
+    /// Panics if the specified column is out of range.
     #[inline(always)]
     pub fn column(&self, column: usize) -> ColumnIter<'_> {
         ColumnIter::new(self, column)
@@ -277,11 +362,11 @@ impl Field {
     }
     /// Returns a `Clearing` on the specified `Field`, or `None` if the location has 1 or more neighboring mines or is out of bounds.
     #[inline(always)]
-    pub fn clearing(&self, anchor_location: (usize, usize)) -> Option<Clearing> {
+    pub fn clearing(&self, anchor_location: FieldCoordinates) -> Option<Clearing> {
         Clearing::new(self, anchor_location)
     }
     /// Returns a `ClearingMut` on the specified `Field`, or `None` if the location has 1 or more neighboring mines or is out of bounds.
-    pub fn clearing_mut(&mut self, anchor_location: (usize, usize)) -> Option<ClearingMut> {
+    pub fn clearing_mut(&mut self, anchor_location: FieldCoordinates) -> Option<ClearingMut> {
         ClearingMut::new(self, anchor_location)
     }
 
@@ -292,27 +377,27 @@ impl Field {
     pub fn calculate_3bv(mut self) -> usize {
         let mut result = 0_usize;
         // First pass: close all clearings.
-        for y in 0..self.dimensions.1.get() {
-            for x in 0..self.dimensions.0.get() {
-                match self[(x, y)] {
+        for y in 0..self.dimensions[1].get() {
+            for x in 0..self.dimensions[0].get() {
+                match self[[x, y]] {
                     Tile::OpenEmpty
                   | Tile::OpenNumber(_) => {
-                        self[(x, y)] = Tile::ClosedEmpty(Flag::NotFlagged)
+                        self[[x, y]] = Tile::ClosedEmpty(Flag::NotFlagged)
                     }
                     _ => {}
                 };
             }
         }
         // Second pass: count numbered tiles and clearings.
-        for y in 0..self.dimensions.1.get() {
-            for x in 0..self.dimensions.0.get() {
-                match self[(x, y)] {
+        for y in 0..self.dimensions[1].get() {
+            for x in 0..self.dimensions[0].get() {
+                match self[[x, y]] {
                     Tile::ClosedEmpty(_) => {
-                        let outcome = self.open((x, y))
+                        let outcome = self.open([x, y])
                             .expect("unexpected out of index error during 3BV calculation");
                         match outcome {
                             ClickOutcome::OpenClearing => {
-                                self.clearing_mut((x, y))
+                                self.clearing_mut([x, y])
                                     .expect("unexpected out of index error during 3BV calculation")
                                     .open(true);
                                 result += 1;
@@ -329,25 +414,25 @@ impl Field {
         result
     }
 }
-impl Index<(usize, usize)> for Field {
+impl Index<FieldCoordinates> for Field {
     type Output = Tile;
     /// Returns the tile at the column `index.0` and row `index.1`, both starting at zero.
     ///
     /// # Panics
     /// Index checking is enabled for this method. For a version which returns an `Option` instead of panicking if the index is out of bounds, see `get`.
     #[inline(always)]
-    fn index(&self, index: (usize, usize)) -> &Self::Output {
-        self.get(index).expect("index out of bounds")
+    fn index(&self, coordinates: FieldCoordinates) -> &Self::Output {
+        self.get(coordinates).expect("index out of bounds")
     }
 }
-impl IndexMut<(usize, usize)> for Field {
+impl IndexMut<FieldCoordinates> for Field {
     #[inline(always)]
     /// Returns the tile at the column `index.0` and row `index.1`, both starting at zero.
     ///
     /// # Panics
     /// Index checking is enabled for this method. For a version which returns an `Option` instead of panicking if the index is out of bounds, see `get_mut`.
     #[inline(always)]
-    fn index_mut(&mut self, index: (usize, usize)) -> &mut Self::Output {
-        self.get_mut(index).expect("index out of bounds")
+    fn index_mut(&mut self, coordinates: FieldCoordinates) -> &mut Self::Output {
+        self.get_mut(coordinates).expect("index out of bounds")
     }
 }
