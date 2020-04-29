@@ -9,6 +9,8 @@ use core::{
 use alloc::{
     vec::Vec
 };
+#[cfg(features = "serialization")]
+use serde::{Serialize, Deserialize};
 use crate::{
     Tile, Flag, ClickOutcome,
     Clearing, ClearingMut,
@@ -17,6 +19,7 @@ use crate::{
 };
 
 /// Represents a playfield.
+#[cfg_attr(features = "serialization", derive(Serialize, Deserialize))]
 pub struct Field {
     storage: Vec<Tile>,
     dimensions: (NonZeroUsize, NonZeroUsize)

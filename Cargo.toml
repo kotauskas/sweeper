@@ -1,6 +1,6 @@
 [package]
 name = "sweeper"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Kotauskas <v.toncharov@gmail.com>"]
 edition = "2018"
 license = "Zlib"
@@ -14,9 +14,11 @@ description = "A foundation for Minesweeper implementations in Rust"
 
 [dependencies]
 rand = {version = "0.7", optional = true, default-features = false, features = ["alloc"]}
+serde = {version = "1.0", optional = true, default-features = false, features = ["derive", "alloc"]}
 
 [features]
-default = ["std", "generation"]
-std = ["rand/std"]
+default = ["std", "generation", "serde"]
+std = ["rand/std", "serde/std"]
 generation = ["rand"]
+serialization = ["serde"]
 track_caller = []

@@ -7,6 +7,7 @@ use super::{
 
 /// A Minesweeper tile.
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(features = "serialization", derive(Serialize, Deserialize))]
 pub enum Tile {
     /// A tile which is empty but hasn't been opened yet.
     ClosedEmpty(Flag),
@@ -343,6 +344,7 @@ impl<'f> From<ClearingMut<'f>> for Clearing<'f> {
 
 /// Represents the state of a flag
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(features = "serialization", derive(Serialize, Deserialize))]
 pub enum Flag {
     /// The player is absolutely sure that the tile this flag is applied to contains a mine.
     Flagged,
@@ -363,6 +365,7 @@ impl Default for Flag {
 
 /// The event produced after clicking a tile.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(features = "serialization", derive(Serialize, Deserialize))]
 pub enum ClickOutcome {
     /// Nothing happens.
     ///
