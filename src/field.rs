@@ -226,11 +226,12 @@ impl Field {
     pub fn chord(&mut self, coordinates: FieldCoordinates) -> ChordOutcome {
         let (x, y) = (coordinates[0], coordinates[1]);
 
-        let num_mines = self.count_neighboring_mines(coordinates);
         let mut result = [ClickOutcome::Nothing; 8];
-        if num_mines == 0 {
-            return result; // Short-circuit if we're not in a valid chord position.
-        }
+        let num_mines = if let Some(tile) = self.get(coordinates) {
+            if let Tile::OpenNumber(num_mines) = tile {
+                num_mines.get()
+            } else {return result}
+        } else {return result};
 
         let mut num_flags = 0_u8;
         let mut ckflag = |coords: FieldCoordinates| {
