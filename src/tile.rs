@@ -1,13 +1,15 @@
 use core::{
     num::{NonZeroUsize, NonZeroU8}
 };
+#[cfg(feature = "serialization")]
+use serde::{Serialize, Deserialize};
 use super::{
     Field
 };
 
 /// A Minesweeper tile.
 #[derive(Copy, Clone, Debug)]
-#[cfg_attr(features = "serialization", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
 pub enum Tile {
     /// A tile which is empty but hasn't been opened yet.
     ClosedEmpty(Flag),
@@ -226,13 +228,13 @@ impl<'f> Clearing<'f> {
     /// Executes the specified closure on every tile inside the clearing. Optionally can include the "shore" (tiles with numbers) as a part of the clearing.
     ///
     /// The closure takes a reference to the field as the first argument and the location of the tile as the second one. No return value is expected.
-    #[cfg_attr(features = "track_caller", track_caller)]
+    #[cfg_attr(feature = "track_caller", track_caller)]
     pub fn for_every_tile<F>(self, include_shore: bool, mut f: F)
     where F: FnMut(&'f Field, (usize, usize)) {
         for_every_tile!(self.field, self.anchor_location, f, include_shore);
     }
     /// Returns the size of the clearing, in tiles. Optionally can include the "shore" (tiles with numbers) as a part of the clearing.
-    #[cfg_attr(features = "track_caller", track_caller)]
+    #[cfg_attr(feature = "track_caller", track_caller)]
     #[must_use = "fully traversing a clearing is an expensive operation involving memory allocation"]
     pub fn size(self, include_shore: bool) -> NonZeroUsize {
         let mut counter = 0_usize;
@@ -241,7 +243,7 @@ impl<'f> Clearing<'f> {
             .expect("unexpected zero clearing size (nonzero clearing size is a safety guarantee)")
     }
     /// Returns `true` if the given tile is inside the clearing, `false` otherwise. Optionally can include the "shore" (tiles with numbers) as a part of the clearing.
-    #[cfg_attr(features = "track_caller", track_caller)]
+    #[cfg_attr(feature = "track_caller", track_caller)]
     #[must_use = "fully traversing a clearing is an expensive operation involving memory allocation"]
     pub fn includes(self, index: (usize, usize), include_shore: bool) -> bool {
         let mut includes = false;
@@ -283,7 +285,7 @@ impl<'f> ClearingMut<'f> {
     /// The closure takes an **immutable** reference to the field as the first argument and the location of the tile as the second one. No return value is expected.
     ///
     /// This is a version of `for_every_tile_mut` which doesn't allow mutating the field.
-    #[cfg_attr(features = "track_caller", track_caller)]
+    #[cfg_attr(feature = "track_caller", track_caller)]
     pub fn for_every_tile<F>(self, include_shore: bool, mut f: F)
     where F: FnMut(&'f Field, (usize, usize)) {
         for_every_tile!(self.field, self.anchor_location, f, include_shore);
@@ -291,7 +293,7 @@ impl<'f> ClearingMut<'f> {
     /// Executes the specified closure on every tile inside the clearing. Optionally can include the "shore" (tiles with numbers) as a part of the clearing.
     ///
     /// The closure takes a **mutable** reference to the field as the first argument and the location of the tile as the second one. No return value is expected.
-    #[cfg_attr(features = "track_caller", track_caller)]
+    #[cfg_attr(feature = "track_caller", track_caller)]
     pub fn for_every_tile_mut<F>(self, include_shore: bool, mut f: F)
     where F: FnMut(&mut Field, (usize, usize)) {
         for_every_tile!(self.field, self.anchor_location, f, include_shore);
@@ -301,7 +303,7 @@ impl<'f> ClearingMut<'f> {
     /// Use [`open`][opn] instead if you want to open the clearing afterwards, since it provides the size itself.
     ///
     /// [opn]: #method.open.html "open — fully opens the clearing on the field and returns the amount of tiles cleared"
-    #[cfg_attr(features = "track_caller", track_caller)]
+    #[cfg_attr(feature = "track_caller", track_caller)]
     #[must_use = "fully traversing a clearing is an expensive operation involving memory allocation"]
     pub fn size(self, include_shore: bool) -> NonZeroUsize {
         let mut counter = 0_usize;
@@ -310,7 +312,7 @@ impl<'f> ClearingMut<'f> {
             .expect("unexpected zero clearing size (nonzero clearing size is a safety guarantee)")
     }
     /// Returns `true` if the given tile is inside the clearing, `false` otherwise. Optionally can include the "shore" (tiles with numbers) as a part of the clearing.
-    #[cfg_attr(features = "track_caller", track_caller)]
+    #[cfg_attr(feature = "track_caller", track_caller)]
     #[must_use = "fully traversing a clearing is an expensive operation involving memory allocation"]
     pub fn includes(self, index: (usize, usize), include_shore: bool) -> bool {
         let mut includes = false;
@@ -344,7 +346,7 @@ impl<'f> From<ClearingMut<'f>> for Clearing<'f> {
 
 /// Represents the state of a flag
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(features = "serialization", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
 pub enum Flag {
     /// The player is absolutely sure that the tile this flag is applied to contains a mine.
     Flagged,
@@ -365,7 +367,7 @@ impl Default for Flag {
 
 /// The event produced after clicking a tile.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(features = "serialization", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
 pub enum ClickOutcome {
     /// Nothing happens.
     ///

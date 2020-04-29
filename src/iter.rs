@@ -60,7 +60,7 @@ impl<'f> RowIter<'f> {
     ///
     /// Used as a convenience function, allowing you to write `field.row(y).column(x)` to find specific tiles.
     #[inline(always)]
-    #[cfg_attr(features = "track_caller", track_caller)]
+    #[cfg_attr(feature = "track_caller", track_caller)]
     pub fn column(&self, column: usize) -> Tile {
         self.get(column).expect("index out of bounds")
     }
@@ -115,7 +115,6 @@ impl Index<usize> for RowIter<'_> {
     ///
     /// [0]: #method.column.html "column — returns the tile at the specified column"
     #[inline(always)]
-    #[cfg_attr(features = "track_caller", track_caller)]
     fn index(&self, column: usize) -> &Tile {
         self.field.get((column, self.row)).expect("index out of bounds")
     }
@@ -161,7 +160,7 @@ impl<'f> ColumnIter<'f> {
     ///
     /// Used as a convenience function, allowing you to write `field.column(x).row(y)` to find specific tiles.
     #[inline(always)]
-    #[cfg_attr(features = "track_caller", track_caller)]
+    #[cfg_attr(feature = "track_caller", track_caller)]
     pub fn row(&self, row: usize) -> Tile {
         self.get(row).expect("index out of bounds")
     }
@@ -212,7 +211,6 @@ impl Index<usize> for ColumnIter<'_> {
     ///
     /// [0]: #method.row.html "row — returns the tile at the specified row"
     #[inline(always)]
-    #[cfg_attr(features = "track_caller", track_caller)]
     fn index(&self, row: usize) -> &Tile {
         self.field.get((self.column, row)).expect("index out of bounds")
     }

@@ -9,7 +9,7 @@ use core::{
 use alloc::{
     vec::Vec
 };
-#[cfg(features = "serialization")]
+#[cfg(feature = "serialization")]
 use serde::{Serialize, Deserialize};
 use crate::{
     Tile, Flag, ClickOutcome,
@@ -19,7 +19,7 @@ use crate::{
 };
 
 /// Represents a playfield.
-#[cfg_attr(features = "serialization", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
 pub struct Field {
     storage: Vec<Tile>,
     dimensions: (NonZeroUsize, NonZeroUsize)
@@ -336,7 +336,6 @@ impl Index<(usize, usize)> for Field {
     /// # Panics
     /// Index checking is enabled for this method. For a version which returns an `Option` instead of panicking if the index is out of bounds, see `get`.
     #[inline(always)]
-    #[cfg_attr(features = "track_caller", track_caller)]
     fn index(&self, index: (usize, usize)) -> &Self::Output {
         self.get(index).expect("index out of bounds")
     }
@@ -348,7 +347,6 @@ impl IndexMut<(usize, usize)> for Field {
     /// # Panics
     /// Index checking is enabled for this method. For a version which returns an `Option` instead of panicking if the index is out of bounds, see `get_mut`.
     #[inline(always)]
-    #[cfg_attr(features = "track_caller", track_caller)]
     fn index_mut(&mut self, index: (usize, usize)) -> &mut Self::Output {
         self.get_mut(index).expect("index out of bounds")
     }

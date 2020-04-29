@@ -21,10 +21,10 @@
 
 #![cfg_attr(feature = "track_caller", feature(track_caller))]
 // Copypaste the following to enable this on specific methods:
-//  #[cfg_attr(features = "track_caller", track_caller)]
+//  #[cfg_attr(feature = "track_caller", track_caller)]
 
 // Copypaste to derive Serde traits on specific methods:
-// #[cfg_attr(features = "serialization", derive(Serialize, Deserialize))]
+// #[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 extern crate alloc;
