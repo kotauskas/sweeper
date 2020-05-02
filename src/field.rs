@@ -4,25 +4,33 @@
 
 use core::{
     ops::{Index, IndexMut},
-    num::{NonZeroUsize, NonZeroU8}
+    num::{NonZeroUsize, NonZeroU8},
+};
+#[cfg(feature = "serialization")]
+use core::{
+    fmt::{self, Formatter},
+    marker::PhantomData,
 };
 use alloc::{
     vec::Vec
 };
 #[cfg(feature = "serialization")]
-use serde::{Serialize, Deserialize};
+use serde::{
+    Serialize, Deserialize,
+    ser::{Serializer, SerializeStruct},
+    de::{Deserializer, Visitor, MapAccess, SeqAccess}
+};
 use crate::{
-    Tile, Flag, ClickOutcome,
+    Tile, TileState, Flag, ClickOutcome,
     Clearing, ClearingMut,
     RowIter, ColumnIter,
     FieldRowsIter, FieldColumnsIter
 };
 
 /// Represents a playfield.
-#[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
-pub struct Field {
-    storage: Vec<Tile>,
-    dimensions: FieldDimensions
+pub struct Field<Ct: 'static, Cf: 'static> {
+    dimensions: FieldDimensions,
+    storage: Vec<Tile<Ct, Cf>>,
 }
 /// The dimensions of a field.
 ///
@@ -40,7 +48,7 @@ pub type ChordOutcome = [ClickOutcome; 8];
 ///
 /// The `Chord` variant of `ClickOutcome` does **not** require any processing — all chords reported by these have already been executed by the time the function finishes execution.
 pub type RecursiveChordOutcome = (FieldCoordinates, ChordOutcome);
-impl Field {
+impl<Ct: Default, Cf> Field<Ct, Cf> {
     /// Creates an empty field filled with unopened tiles, with the given dimensions.
     #[inline]
     #[must_use = "this performs a memory allocation as big as the area of the field"]
@@ -54,6 +62,21 @@ impl Field {
             tfield.storage.push(Tile::default());
         }
         tfield
+    }
+}
+impl<Ct, Cf> Field<Ct, Cf> {
+    /// Creates a field with the specified dimensions from the specified `Vec` of tiles, given in [row-major order][rmo].
+    ///
+    /// Keep in mind that indexing over fields is still done in column-major order.
+    ///
+    /// [rmo]: https://en.wikipedia.org/wiki/Row-_and_column-major_order "Row- and column-major order — Wikipedia"
+    pub fn from_dimensions_and_storage(dimensions: FieldDimensions, storage: Vec<Tile<Ct, Cf>>) -> Option<Self> {
+        let area = dimensions[0].get() * dimensions[1].get();
+        if storage.len() == area {
+            Some(Self {dimensions, storage})
+        } else {
+            None
+        }
     }
     /// Adds mines with the selected percentage of mines and, optionally, a safe spot, which can never have any surrounding mines.
     #[cfg(feature = "generation")]
@@ -78,7 +101,7 @@ impl Field {
                     continue; // Jumps over the decrement.
                 }
             }
-            self[mine_location] = Tile::Mine(Flag::NotFlagged); // Install the mine.
+            self[mine_location].state = TileState::Mine(Flag::NotFlagged); // Install the mine.
             if mines_left == 0 {break};
             mines_left -= 1; // Implicit else, decrements otherwise.
         }
@@ -99,7 +122,7 @@ impl Field {
         let mut count = 0_usize;
         for column in self.columns() {
             for tile in column {
-                if tile.is_open() {count += 1};
+                if tile.state.is_open() {count += 1};
             }
         }
         count
@@ -110,7 +133,7 @@ impl Field {
         let mut count = 0_usize;
         for column in self.columns() {
             for tile in column {
-                if tile.is_closed() {count += 1};
+                if tile.state.is_closed() {count += 1};
             }
         }
         count
@@ -123,7 +146,7 @@ impl Field {
         let mut count = 0_usize;
         for column in self.columns() {
             for tile in column {
-                if tile.is_required_to_open() {count += 1};
+                if tile.state.is_required_to_open() {count += 1};
             }
         }
         count
@@ -155,8 +178,8 @@ impl Field {
         if location[0] > width || location[1] > height {
             return None;
         }
-        let tile = self[location];
-        if let Tile::Mine(_) = tile {
+        let tile = &self[location];
+        if let TileState::Mine(_) = tile.state {
             Some(true)
         } else {Some(false)}
     }
@@ -165,7 +188,7 @@ impl Field {
     ///
     /// This is the immutable version of `get_mut`.
     #[inline]
-    pub fn get(&self, coordinates: FieldCoordinates) -> Option<&Tile> {
+    pub fn get(&self, coordinates: FieldCoordinates) -> Option<&Tile<Ct, Cf>> {
         let (width, height) = (self.dimensions[0].get(), self.dimensions[1].get());
         let (x, y) = (coordinates[0], coordinates[1]);
 
@@ -179,7 +202,7 @@ impl Field {
     ///
     /// This is the mutable version of `get`.
     #[inline]
-    pub fn get_mut(&mut self, coordinates: FieldCoordinates) -> Option<&mut Tile> {
+    pub fn get_mut(&mut self, coordinates: FieldCoordinates) -> Option<&mut Tile<Ct, Cf>> {
         let (width, height) = (self.dimensions[0].get(), self.dimensions[1].get());
         let (x, y) = (coordinates[0], coordinates[1]);
 
@@ -192,7 +215,7 @@ impl Field {
     /// Returns the outcome of clicking the specified tile **without affecting the field**, or `None` if the index is out of bounds.
     pub fn peek(&self, coordinates: FieldCoordinates) -> Option<ClickOutcome> {
         if let Some(tile) = self.get(coordinates) {
-            if let Some(outcome) = tile.peek_local() {
+            if let Some(outcome) = tile.state.peek_local() {
                 Some(outcome)
             } else {
                 let neighbors = self.count_neighboring_mines(coordinates);
@@ -212,8 +235,8 @@ impl Field {
     pub fn open(&mut self, coordinates: FieldCoordinates) -> Option<ClickOutcome> {
         if let Some(outcome) = self.peek(coordinates) {
             match outcome {
-                ClickOutcome::OpenClearing => self[coordinates] = Tile::OpenEmpty,
-                ClickOutcome::OpenNumber(num) => self[coordinates] = Tile::OpenNumber(num),
+                ClickOutcome::OpenClearing => self[coordinates].state = TileState::OpenEmpty,
+                ClickOutcome::OpenNumber(num) => self[coordinates].state = TileState::OpenNumber(num),
                 _ => {}
             };
             Some(outcome)
@@ -228,7 +251,7 @@ impl Field {
 
         let mut result = [ClickOutcome::Nothing; 8];
         let num_mines = if let Some(tile) = self.get(coordinates) {
-            if let Tile::OpenNumber(num_mines) = tile {
+            if let TileState::OpenNumber(num_mines) = tile.state {
                 num_mines.get()
             } else {return result}
         } else {return result};
@@ -236,7 +259,7 @@ impl Field {
         let mut num_flags = 0_u8;
         let mut ckflag = |coords: FieldCoordinates| {
             if let Some(tile) = self.get(coords) {
-                if tile.is_flagged() {
+                if tile.state.is_flagged() {
                     num_flags += 1;
                 }
             }
@@ -256,7 +279,7 @@ impl Field {
 
         let calc_result = |coords: FieldCoordinates| {
             if let Some(tile) = self.get(coords) {
-                if !tile.is_flagged() {
+                if !tile.state.is_flagged() {
                 self.peek(coords).unwrap_or_default()
                 } else {
                     ClickOutcome::Nothing
@@ -276,7 +299,6 @@ impl Field {
 
         result
     }
-    // TODO This is unfinished.
     /// Performs a chord on the specified tile recursively, i.e. runs chords for all number tiles which were uncovered from chording.
     ///
     /// The returned value contains one entry per chord operation
@@ -337,7 +359,7 @@ impl Field {
     /// # Panics
     /// Panics if the specified row is out of range.
     #[inline(always)]
-    pub fn row(&self, row: usize) -> RowIter<'_> {
+    pub fn row(&self, row: usize) -> RowIter<'_, Ct, Cf> {
         RowIter::new(self, row)
     }
     /// Returns an iterator over a single column.
@@ -347,28 +369,28 @@ impl Field {
     /// # Panics
     /// Panics if the specified column is out of range.
     #[inline(always)]
-    pub fn column(&self, column: usize) -> ColumnIter<'_> {
+    pub fn column(&self, column: usize) -> ColumnIter<'_, Ct, Cf> {
         ColumnIter::new(self, column)
     }
 
     /// Returns an iterator over the field's columns.
     #[inline(always)]
-    pub fn rows(&self) -> FieldRowsIter<'_> {
+    pub fn rows(&self) -> FieldRowsIter<'_, Ct, Cf> {
         FieldRowsIter::new(self)
     }
     /// Returns an iterator over the field's columns.
     #[inline(always)]
-    pub fn columns(&self) -> FieldColumnsIter<'_> {
+    pub fn columns(&self) -> FieldColumnsIter<'_, Ct, Cf> {
         FieldColumnsIter::new(self)
     }
     /// Returns a `Clearing` on the specified `Field`, or `None` if the location has 1 or more neighboring mines or is out of bounds.
     #[inline(always)]
-    pub fn clearing(&self, anchor_location: FieldCoordinates) -> Option<Clearing> {
-        Clearing::new(self, anchor_location)
+    pub fn clearing(&self, anchor_location: FieldCoordinates) -> Option<Clearing<Ct, Cf>> {
+        Clearing::<'_, Ct, Cf>::new(self, anchor_location)
     }
     /// Returns a `ClearingMut` on the specified `Field`, or `None` if the location has 1 or more neighboring mines or is out of bounds.
-    pub fn clearing_mut(&mut self, anchor_location: FieldCoordinates) -> Option<ClearingMut> {
-        ClearingMut::new(self, anchor_location)
+    pub fn clearing_mut(&mut self, anchor_location: FieldCoordinates) -> Option<ClearingMut<Ct, Cf>> {
+        ClearingMut::<'_, Ct, Cf>::new(self, anchor_location)
     }
 
     /// Calculates the smallest amount of clicks required to clear a field.
@@ -380,10 +402,10 @@ impl Field {
         // First pass: close all clearings.
         for y in 0..self.dimensions[1].get() {
             for x in 0..self.dimensions[0].get() {
-                match self[[x, y]] {
-                    Tile::OpenEmpty
-                  | Tile::OpenNumber(_) => {
-                        self[[x, y]] = Tile::ClosedEmpty(Flag::NotFlagged)
+                match self[[x, y]].state {
+                    TileState::OpenEmpty
+                  | TileState::OpenNumber(_) => {
+                        self[[x, y]].state = TileState::ClosedEmpty(Flag::NotFlagged)
                     }
                     _ => {}
                 };
@@ -392,8 +414,8 @@ impl Field {
         // Second pass: count numbered tiles and clearings.
         for y in 0..self.dimensions[1].get() {
             for x in 0..self.dimensions[0].get() {
-                match self[[x, y]] {
-                    Tile::ClosedEmpty(_) => {
+                match self[[x, y]].state {
+                    TileState::ClosedEmpty(_) => {
                         let outcome = self.open([x, y])
                             .expect("unexpected out of index error during 3BV calculation");
                         match outcome {
@@ -407,7 +429,7 @@ impl Field {
                             _ => {}
                         };
                     },
-                    Tile::OpenNumber(_) => result += 1,
+                    TileState::OpenNumber(_) => result += 1,
                     _ => {}
                 };
             }
@@ -415,8 +437,8 @@ impl Field {
         result
     }
 }
-impl Index<FieldCoordinates> for Field {
-    type Output = Tile;
+impl<Ct, Cf> Index<FieldCoordinates> for Field<Ct, Cf> {
+    type Output = Tile<Ct, Cf>;
     /// Returns the tile at the column `index.0` and row `index.1`, both starting at zero.
     ///
     /// # Panics
@@ -426,7 +448,7 @@ impl Index<FieldCoordinates> for Field {
         self.get(coordinates).expect("index out of bounds")
     }
 }
-impl IndexMut<FieldCoordinates> for Field {
+impl<Ct, Cf> IndexMut<FieldCoordinates> for Field<Ct, Cf> {
     #[inline(always)]
     /// Returns the tile at the column `index.0` and row `index.1`, both starting at zero.
     ///
@@ -435,5 +457,100 @@ impl IndexMut<FieldCoordinates> for Field {
     #[inline(always)]
     fn index_mut(&mut self, coordinates: FieldCoordinates) -> &mut Self::Output {
         self.get_mut(coordinates).expect("index out of bounds")
+    }
+}
+#[cfg(feature = "serialization")]
+impl<Ct, Cf> Serialize for Field<Ct, Cf>
+where Ct: Serialize,
+      Cf: Serialize {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+       let mut s = s.serialize_struct("Field", 2)?;
+       s.serialize_field("dimensions", &self.dimensions)?;
+       s.serialize_field("storage", &self.storage)?;
+       s.end()
+    }
+}
+#[cfg(feature = "serialization")]
+impl<'de, Ct, Cf> Deserialize<'de> for Field<Ct, Cf>
+where Ct: Deserialize<'de>,
+      Cf: Deserialize<'de> {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        use serde::de;
+        const FIELDS: &[&str] = &["storage", "dimensions"];
+        enum StructField { Storage, Dimensions };
+
+        // This part could also be generated independently by:
+        //
+        //    #[derive(Deserialize)]
+        //    #[serde(field_identifier, rename_all = "lowercase")]
+        //    enum Field { Secs, Nanos }
+        impl<'de> Deserialize<'de> for StructField {
+            fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+                struct StructFieldVisitor;
+
+                impl<'de> Visitor<'de> for StructFieldVisitor {
+                    type Value = StructField;
+
+                    fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+                        formatter.write_str("`storage` or `dimensions`")
+                    }
+
+                    fn visit_str<E: de::Error>(self, value: &str) -> Result<StructField, E> {
+                        match value {
+                            "storage" => Ok(StructField::Storage),
+                            "dimensions" => Ok(StructField::Dimensions),
+                            _ => Err(de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+
+                deserializer.deserialize_identifier(StructFieldVisitor)
+            }
+        }
+
+        struct FieldVisitor<Ct, Cf>(PhantomData<(Ct, Cf)>);
+
+        impl<'de, Ct: 'static, Cf: 'static> Visitor<'de> for FieldVisitor<Ct, Cf>
+        where Ct: Deserialize<'de>,
+              Cf: Deserialize<'de> {
+            type Value = Field<Ct, Cf>;
+
+            fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+                formatter.write_str("struct Field")
+            }
+
+            fn visit_seq<V: SeqAccess<'de>>(self, mut seq: V) -> Result<Self::Value, V::Error> {
+                let dimensions = seq.next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+                let storage = seq.next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(1, &self))?;
+                Ok(Field {dimensions, storage})
+            }
+
+            fn visit_map<V: MapAccess<'de>>(self, mut map: V) -> Result<Self::Value, V::Error> {
+                let mut dimensions: Option<FieldDimensions> = None;
+                let mut storage: Option<Vec<Tile<Ct, Cf>>> = None;
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        StructField::Dimensions => {
+                            if dimensions.is_some() {
+                                return Err(de::Error::duplicate_field("dimensions"));
+                            }
+                            dimensions = Some(map.next_value()?);
+                        }
+                        StructField::Storage => {
+                            if storage.is_some() {
+                                return Err(de::Error::duplicate_field("storage"));
+                            }
+                            storage = Some(map.next_value()?);
+                        }
+                    }
+                }
+                let dimensions = dimensions.ok_or_else(|| de::Error::missing_field("dimensions"))?;
+                let storage = storage.ok_or_else(|| de::Error::missing_field("storage"))?;
+                Ok(Field {dimensions, storage})
+            }
+        }
+        d.deserialize_struct("Field", FIELDS, FieldVisitor(PhantomData))
     }
 }

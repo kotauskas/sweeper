@@ -40,49 +40,49 @@ use super::{
 /// assert_eq!(mine_tile, Tile::Mine(Flag::NotFlagged)); // It's a mine
 /// ```
 #[derive(Clone)]
-pub struct RowIter<'f> {
-    field: &'f Field,
+pub struct RowIter<'f, Ct: 'static, Cf: 'static> {
+    field: &'f Field<Ct, Cf>,
     row: usize,
     index: Range<usize>
 }
-impl<'f> RowIter<'f> {
+impl<'f, Ct, Cf> RowIter<'f, Ct, Cf> {
     /// Creates an iterator over the specified row of the specified field.
     ///
     /// # Panics
     /// Panics if the specified row is out of range.
     #[inline(always)]
-    pub fn new(field: &'f Field, row: usize) -> Self {
+    pub fn new(field: &'f Field<Ct, Cf>, row: usize) -> Self {
         assert!(row < field.dimensions()[1].get());
         Self {field, row, index: 0..field.dimensions()[0].get()}
     }
     /// Returns the tile at the specified column, or `None` if such a column doesn't exist. The row for which the iterator was created is used.
     #[inline(always)]
-    pub fn get(&self, column: usize) -> Option<Tile> {
-        self.field.get([column, self.row]).copied()
+    pub fn get(&self, column: usize) -> Option<&Tile<Ct, Cf>> {
+        self.field.get([column, self.row])
     }
     /// Returns the tile at the specified column.
     ///
     /// Used as a convenience function, allowing you to write `field.row(y).column(x)` to find specific tiles.
     #[inline(always)]
     #[cfg_attr(feature = "track_caller", track_caller)]
-    pub fn column(&self, column: usize) -> Tile {
+    pub fn column(&self, column: usize) -> &Tile<Ct, Cf> {
         self.get(column).expect("index out of bounds")
     }
     /// Returns the field which the iterator iterates over.
     #[inline(always)]
-    pub fn field(&self) -> &'f Field {
+    pub fn field(&self) -> &'f Field<Ct, Cf> {
         self.field
     }
 }
-impl<'f> Iterator for RowIter<'f> {
-    type Item = Tile;
+impl<'f, Ct, Cf> Iterator for RowIter<'f, Ct, Cf> {
+    type Item = &'f Tile<Ct, Cf>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.index.end - self.index.start == 0 {
             return None;
         }
         let el = self.field.get([self.index.start, self.row]);
         self.index.start += 1;
-        el.copied()
+        el
     }
     /// Returns the remaining amount of tiles to iterate upon.
     ///
@@ -92,25 +92,25 @@ impl<'f> Iterator for RowIter<'f> {
         (self.len(), Some(self.len()))
     }
 }
-impl<'f> DoubleEndedIterator for RowIter<'f> {
+impl<'f, Ct, Cf> DoubleEndedIterator for RowIter<'f, Ct, Cf> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.index.end - self.index.start == 0 {
             return None;
         }
         self.index.end -= 1;
-        self.field.get([self.index.end, self.row]).copied()
+        self.field.get([self.index.end, self.row])
     }
 }
-impl<'f> ExactSizeIterator for RowIter<'f> {
+impl<'f, Ct, Cf> ExactSizeIterator for RowIter<'f, Ct, Cf> {
     /// Returns the remaining amount of tiles to iterate upon.
     #[inline(always)]
     fn len(&self) -> usize {
         self.index.end - self.index.start
     }
 }
-impl FusedIterator for RowIter<'_> {}
-impl Index<usize> for RowIter<'_> {
-    type Output = Tile;
+impl<Ct, Cf> FusedIterator for RowIter<'_, Ct, Cf> {}
+impl<Ct, Cf> Index<usize> for RowIter<'_, Ct, Cf> {
+    type Output = Tile<Ct, Cf>;
     /// Returns the tile at the specified column.
     ///
     /// Used as a convenience function, allowing you to write `field.row(y)[x]` to find specific tiles.
@@ -119,7 +119,7 @@ impl Index<usize> for RowIter<'_> {
     ///
     /// [0]: #method.column.html "column — returns the tile at the specified column"
     #[inline(always)]
-    fn index(&self, column: usize) -> &Tile {
+    fn index(&self, column: usize) -> &Tile<Ct, Cf> {
         self.field.get([column, self.row]).expect("index out of bounds")
     }
 }
@@ -144,73 +144,73 @@ impl Index<usize> for RowIter<'_> {
 /// assert_eq!(mine_tile, Tile::Mine(Flag::NotFlagged)); // It's a mine
 /// ```
 #[derive(Clone)]
-pub struct ColumnIter<'f> {
-    field: &'f Field,
+pub struct ColumnIter<'f, Ct: 'static, Cf: 'static> {
+    field: &'f Field<Ct, Cf>,
     column: usize,
     index: Range<usize>
 }
-impl<'f> ColumnIter<'f> {
+impl<'f, Ct, Cf> ColumnIter<'f, Ct, Cf> {
     /// Creates an iterator over the specified column of the specified field.
     ///
     /// # Panics
     /// Panics if the specified row is out of range.
     #[inline(always)]
-    pub fn new(field: &'f Field, column: usize) -> Self {
+    pub fn new(field: &'f Field<Ct, Cf>, column: usize) -> Self {
         assert!(column < field.dimensions()[0].get());
         Self {field, column, index: 0..field.dimensions()[0].get()}
     }
     /// Returns the tile at the specified row, or `None` if such a row doesn't exist. The column for which the iterator was created is used.
     #[inline(always)]
-    pub fn get(&self, row: usize) -> Option<Tile> {
-        self.field.get([self.column, row]).copied()
+    pub fn get(&self, row: usize) -> Option<&Tile<Ct, Cf>> {
+        self.field.get([self.column, row])
     }
     /// Returns the tile at the specified row.
     ///
     /// Used as a convenience function, allowing you to write `field.column(x).row(y)` to find specific tiles.
     #[inline(always)]
     #[cfg_attr(feature = "track_caller", track_caller)]
-    pub fn row(&self, row: usize) -> Tile {
+    pub fn row(&self, row: usize) -> &Tile<Ct, Cf> {
         self.get(row).expect("index out of bounds")
     }
     /// Returns the field which the iterator iterates over.
     #[inline(always)]
-    pub fn field(&self) -> &'f Field {
+    pub fn field(&self) -> &'f Field<Ct, Cf> {
         self.field
     }
 }
-impl<'f> Iterator for ColumnIter<'f> {
-    type Item = Tile;
+impl<'f, Ct, Cf> Iterator for ColumnIter<'f, Ct, Cf> {
+    type Item = &'f Tile<Ct, Cf>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.len() == 0 {
             return None;
         }
         let el = self.field.get([self.column, self.index.start]);
         self.index.start += 1;
-        el.copied()
+        el
     }
     #[inline(always)]
     fn size_hint(&self) -> (usize, Option<usize>) {
         (self.len(), Some(self.len()))
     }
 }
-impl<'f> DoubleEndedIterator for ColumnIter<'f> {
+impl<'f, Ct, Cf> DoubleEndedIterator for ColumnIter<'f, Ct, Cf> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.len() == 0 {
             return None;
         }
         self.index.end -= 1;
-        self.field.get([self.column, self.index.end]).copied()
+        self.field.get([self.column, self.index.end])
     }
 }
-impl<'f> ExactSizeIterator for ColumnIter<'f> {
+impl<'f, Ct, Cf> ExactSizeIterator for ColumnIter<'f, Ct, Cf> {
     #[inline(always)]
     fn len(&self) -> usize {
         self.index.end - self.index.start
     }
 }
-impl FusedIterator for ColumnIter<'_> {}
-impl Index<usize> for ColumnIter<'_> {
-    type Output = Tile;
+impl<Ct, Cf> FusedIterator for ColumnIter<'_, Ct, Cf> {}
+impl<Ct, Cf> Index<usize> for ColumnIter<'_, Ct, Cf> {
+    type Output = Tile<Ct, Cf>;
     /// Returns the tile at the specified row.
     ///
     /// Used as a convenience function, allowing you to write `field.column(x)[y]` to find specific tiles.
@@ -219,7 +219,7 @@ impl Index<usize> for ColumnIter<'_> {
     ///
     /// [0]: #method.row.html "row — returns the tile at the specified row"
     #[inline(always)]
-    fn index(&self, row: usize) -> &Tile {
+    fn index(&self, row: usize) -> &Tile<Ct, Cf> {
         self.field.get([self.column, row]).expect("index out of bounds")
     }
 }
@@ -245,21 +245,21 @@ impl Index<usize> for ColumnIter<'_> {
 /// assert_eq!(row_with_mine, Some(3)); // We indeed have found a mine in the 4th row.
 /// ```
 #[derive(Clone)]
-pub struct FieldRowsIter<'f> {
-    field: &'f Field,
+pub struct FieldRowsIter<'f, Ct: 'static, Cf: 'static> {
+    field: &'f Field<Ct, Cf>,
     index: Range<usize>
 }
-impl<'f> FieldRowsIter<'f> {
+impl<'f, Ct, Cf> FieldRowsIter<'f, Ct, Cf> {
     /// Returns an iterator over the specified field's rows.
     #[inline(always)]
-    pub fn new(field: &'f Field) -> Self {
+    pub fn new(field: &'f Field<Ct, Cf>) -> Self {
         Self {
             field, index: 0..field.dimensions()[1].get()
         }
     }
 }
-impl<'f> Iterator for FieldRowsIter<'f> {
-    type Item = RowIter<'f>;
+impl<'f, Ct, Cf> Iterator for FieldRowsIter<'f, Ct, Cf> {
+    type Item = RowIter<'f, Ct, Cf>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.len() == 0 {
             return None;
@@ -273,7 +273,7 @@ impl<'f> Iterator for FieldRowsIter<'f> {
         (self.len(), Some(self.len()))
     }
 }
-impl<'f> DoubleEndedIterator for FieldRowsIter<'f> {
+impl<'f, Ct, Cf> DoubleEndedIterator for FieldRowsIter<'f, Ct, Cf> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.len() == 0 {
             return None;
@@ -282,13 +282,13 @@ impl<'f> DoubleEndedIterator for FieldRowsIter<'f> {
         Some(self.field.row(self.index.end))
     }
 }
-impl<'f> ExactSizeIterator for FieldRowsIter<'f> {
+impl<'f, Ct, Cf> ExactSizeIterator for FieldRowsIter<'f, Ct, Cf> {
     #[inline(always)]
     fn len(&self) -> usize {
         self.index.end - self.index.start
     }
 }
-impl FusedIterator for FieldRowsIter<'_> {}
+impl<Ct, Cf> FusedIterator for FieldRowsIter<'_, Ct, Cf> {}
 
 /// An iterator over the columns of a field.
 ///
@@ -311,21 +311,21 @@ impl FusedIterator for FieldRowsIter<'_> {}
 /// assert_eq!(column_with_mine, Some(8)); // We indeed have found a mine in the 9th column.
 /// ```
 #[derive(Clone)]
-pub struct FieldColumnsIter<'f> {
-    field: &'f Field,
+pub struct FieldColumnsIter<'f, Ct: 'static, Cf: 'static> {
+    field: &'f Field<Ct, Cf>,
     index: Range<usize>
 }
-impl<'f> FieldColumnsIter<'f> {
+impl<'f, Ct, Cf> FieldColumnsIter<'f, Ct, Cf> {
     /// Returns an iterator over the specified field's columns.
     #[inline(always)]
-    pub fn new(field: &'f Field) -> Self {
+    pub fn new(field: &'f Field<Ct, Cf>) -> Self {
         Self {
             field, index: 0..field.dimensions()[0].get()
         }
     }
 }
-impl<'f> Iterator for FieldColumnsIter<'f> {
-    type Item = ColumnIter<'f>;
+impl<'f, Ct, Cf> Iterator for FieldColumnsIter<'f, Ct, Cf> {
+    type Item = ColumnIter<'f, Ct, Cf>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.len() == 0 {
             return None;
@@ -339,7 +339,7 @@ impl<'f> Iterator for FieldColumnsIter<'f> {
         (self.len(), Some(self.len()))
     }
 }
-impl<'f> DoubleEndedIterator for FieldColumnsIter<'f> {
+impl<'f, Ct, Cf> DoubleEndedIterator for FieldColumnsIter<'f, Ct, Cf> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.len() == 0 {
             return None;
@@ -348,10 +348,10 @@ impl<'f> DoubleEndedIterator for FieldColumnsIter<'f> {
         Some(self.field.column(self.index.end))
     }
 }
-impl<'f> ExactSizeIterator for FieldColumnsIter<'f> {
+impl<'f, Ct, Cf> ExactSizeIterator for FieldColumnsIter<'f, Ct, Cf> {
     #[inline(always)]
     fn len(&self) -> usize {
         self.index.end - self.index.start
     }
 }
-impl FusedIterator for FieldColumnsIter<'_> {}
+impl<Ct, Cf> FusedIterator for FieldColumnsIter<'_, Ct, Cf> {}

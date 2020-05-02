@@ -25,7 +25,8 @@
 
 // Copypaste to derive Serde traits on specific methods:
 // #[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
-
+// Copypaste to enable certain items when Serde is enabled:
+// #[cfg(feature = "serialization")]
 #![cfg_attr(not(feature = "std"), no_std)]
 extern crate alloc;
 
