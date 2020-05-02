@@ -26,18 +26,18 @@ use super::{
 ///
 /// # Usage
 /// ```
-/// # use sweeper::{Field, Tile, Flag, RowIter};
+/// # use sweeper::{Field, TileState, Flag, RowIter};
 /// # use core::num::NonZeroUsize;
 /// #
-/// let mut field = Field::empty([ // Create a field to work with
+/// let mut field = Field::<(), ()>::empty([ // Create a field to work with
 ///     NonZeroUsize::new(9).unwrap(),
 ///     NonZeroUsize::new(4).unwrap()
 /// ]);
-/// field[[8, 3]] = Tile::Mine(Flag::NotFlagged); // Place a mine (remember that indicies start from 0)
+/// field[[8, 3]].state = TileState::Mine(Flag::NotFlagged); // Place a mine (remember that indicies start from 0)
 /// let mut rowiter = field.row(3); // Create an iterator over the fourth row
 /// let mine_tile = rowiter.nth(8) // Find the nineth element in the row
 ///     .unwrap(); // Get rid of the Option wrap
-/// assert_eq!(mine_tile, Tile::Mine(Flag::NotFlagged)); // It's a mine
+/// assert_eq!(mine_tile.state, TileState::Mine(Flag::NotFlagged)); // It's a mine
 /// ```
 #[derive(Clone)]
 pub struct RowIter<'f, Ct: 'static, Cf: 'static> {
@@ -130,18 +130,18 @@ impl<Ct, Cf> Index<usize> for RowIter<'_, Ct, Cf> {
 ///
 /// # Usage
 /// ```
-/// # use sweeper::{Field, Tile, Flag, ColumnIter};
+/// # use sweeper::{Field, TileState, Flag, ColumnIter};
 /// # use core::num::NonZeroUsize;
 /// #
-/// let mut field = Field::empty([ // Create a field to work with
+/// let mut field = Field::<(), ()>::empty([ // Create a field to work with
 ///     NonZeroUsize::new(9).unwrap(),
 ///     NonZeroUsize::new(8).unwrap()
 /// ]);
-/// field[[8, 7]] = Tile::Mine(Flag::NotFlagged); // Place a mine (remember that indicies start from 0)
+/// field[[8, 7]].state = TileState::Mine(Flag::NotFlagged); // Place a mine (remember that indicies start from 0)
 /// let mut columniter = field.column(8); // Create an iterator over the nineth column
 /// let mine_tile = columniter.nth(7) // Find the seventh element in the column
 ///     .unwrap(); // Get rid of the Option wrap
-/// assert_eq!(mine_tile, Tile::Mine(Flag::NotFlagged)); // It's a mine
+/// assert_eq!(mine_tile.state, TileState::Mine(Flag::NotFlagged)); // It's a mine
 /// ```
 #[derive(Clone)]
 pub struct ColumnIter<'f, Ct: 'static, Cf: 'static> {
@@ -228,17 +228,17 @@ impl<Ct, Cf> Index<usize> for ColumnIter<'_, Ct, Cf> {
 ///
 /// # Usage
 /// ```
-/// # use sweeper::{Field, Tile, Flag, FieldRowsIter};
+/// # use sweeper::{Field, TileState, Flag, FieldRowsIter};
 /// # use core::num::NonZeroUsize;
 /// #
-/// let mut field = Field::empty([ // Create a field to work with
+/// let mut field = Field::<(), ()>::empty([ // Create a field to work with
 ///     NonZeroUsize::new(9).unwrap(),
 ///     NonZeroUsize::new(4).unwrap()
 /// ]);
-/// field[[8, 3]] = Tile::Mine(Flag::NotFlagged); // Place a mine (remember that indicies start from 0)
+/// field[[8, 3]].state = TileState::Mine(Flag::NotFlagged); // Place a mine (remember that indicies start from 0)
 /// let mut row_with_mine: Option<usize> = None; // Keep track of our findings using an Option
 /// for (y, mut row) in field.rows().enumerate() { // In each row...
-///     if row.find(|t| t.is_mine()).is_some() { // If the row contains a mine...
+///     if row.find(|t| (*t).state.is_mine()).is_some() { // If the row contains a mine...
 ///         row_with_mine = Some(y); //...take the row number out of the loop.
 ///     }
 /// }
@@ -294,17 +294,17 @@ impl<Ct, Cf> FusedIterator for FieldRowsIter<'_, Ct, Cf> {}
 ///
 ///  # Usage
 /// ```
-/// # use sweeper::{Field, Tile, Flag, FieldColumnsIter};
+/// # use sweeper::{Field, TileState, Flag, FieldColumnsIter};
 /// # use core::num::NonZeroUsize;
 /// #
-/// let mut field = Field::empty([ // Create a field to work with
+/// let mut field = Field::<(), ()>::empty([ // Create a field to work with
 ///     NonZeroUsize::new(9).unwrap(),
 ///     NonZeroUsize::new(8).unwrap()
 /// ]);
-/// field[[8, 7]] = Tile::Mine(Flag::NotFlagged); // Place a mine (remember that indicies start from 0)
+/// field[[8, 7]].state = TileState::Mine(Flag::NotFlagged); // Place a mine (remember that indicies start from 0)
 /// let mut column_with_mine: Option<usize> = None; // Keep track of our findings using an Option
 /// for (x, mut column) in field.columns().enumerate() { // In each column...
-///     if column.find(|t| t.is_mine()).is_some() { // If the column contains a mine...
+///     if column.find(|t| (*t).state.is_mine()).is_some() { // If the column contains a mine...
 ///         column_with_mine = Some(x); //...take the column number out of the loop.
 ///     }
 /// }
