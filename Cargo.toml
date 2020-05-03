@@ -1,6 +1,6 @@
 [package]
 name = "sweeper"
-version = "0.3.1"
+version = "1.0.0-rc1"
 authors = ["Kotauskas <v.toncharov@gmail.com>"]
 edition = "2018"
 license = "Zlib"
