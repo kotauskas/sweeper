@@ -19,6 +19,7 @@
 //!
 //!   Places the `track_caller` attribute on indexing operators and other panicking methods, improving panic messages. **Requires a nightly compiler as of Rust 1.43.0**.
 
+#![warn(clippy::pedantic, clippy::cargo, clippy::nursery)]
 #![cfg_attr(feature = "track_caller", feature(track_caller))]
 // Copypaste the following to enable this on specific methods:
 //  #[cfg_attr(feature = "track_caller", track_caller)]
