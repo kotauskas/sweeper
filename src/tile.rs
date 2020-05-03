@@ -429,15 +429,23 @@ macro_rules! for_every_tile {
         }
     };
 }
-/// A clearing on the specified field.
+/// A reference to a clearing on the specified field.
 ///
-/// This is merely a reference to the area on a field which is known to be a clearing. Nothing is owned by this structure.
+/// Clearings in Minesweeper are regions of tiles which can be safely opened by opening just one of its tiles. It's easier to demonstrate that with an example:
+///
+/// ![Illustration of a clearing][img_clearing]
+///
+/// As you can see, clearings mostly consist of tiles without numbers, i.e. tiles which don't have any mines in 8 directions around them. The tiles with numbers in 8 directions of all numberless tiles also can be included in the clearing, but they don't obey the rule presented above: opening any tile with a number doesn't make it unconditionally safe to open any of the surrounding tiles without looking at other tiles, flags, the number of mines and such.
+///
+/// This structure consists of two elements which define a clearing on a field: a reference to the field and an **anchor location**. The former is self explanatory; the latter is the coordinates of a tile on a field which belongs to the clearing we want to refer to. Locating all tiles in a clearing uses a `Vec`-based recursive fill algorithm which starts from that exact location.
+///
+/// [img_clearing]: https://i.imgur.com/8KySLVj.png " "
 #[derive(Copy, Clone)]
-pub struct Clearing<'f, Ct: 'static, Cf: 'static> {
+pub struct Clearing<'f, Ct, Cf> {
     field: &'f Field<Ct, Cf>,
     anchor_location: FieldCoordinates
 }
-impl<'f, Ct: 'static, Cf: 'static> Clearing<'f, Ct, Cf> {
+impl<'f, Ct, Cf> Clearing<'f, Ct, Cf> {
     /// Returns a `Clearing` on the specified `Field`, or `None` if the location has 1 or more neighboring mines or is out of bounds.
     pub fn new(field: &'f Field<Ct, Cf>, anchor_location: FieldCoordinates) -> Option<Self> {
         if field.get(anchor_location).is_some() {
@@ -452,7 +460,7 @@ impl<'f, Ct: 'static, Cf: 'static> Clearing<'f, Ct, Cf> {
     }
     /// Returns the field on which this clearing is located.
     #[inline(always)]
-    pub fn field(self) -> &'f Field<Ct, Cf> { self.field }
+    pub const fn field(self) -> &'f Field<Ct, Cf> { self.field }
     /// Returns the location around which this clearing is formed.
     ///
     /// This can be any location inside the clearing. More specifically, the one used during creation is returned.
@@ -487,12 +495,14 @@ impl<'f, Ct: 'static, Cf: 'static> Clearing<'f, Ct, Cf> {
 }
 /// A **mutable** reference to a clearing on the specified field.
 ///
-/// This is merely a **mutable** reference to the area on a field which is known to be clear land. Nothing is owned by this structure.
-pub struct ClearingMut<'f, Ct: 'static, Cf: 'static> {
+/// See the documentation for the [immutable version] for an explanation of what is a clearing and how this structure works.
+///
+/// [clearing]: struct.Clearing.html "Clearing — a reference to a clearing on the specified field"
+pub struct ClearingMut<'f, Ct, Cf> {
     field: &'f mut Field<Ct, Cf>,
     anchor_location: FieldCoordinates
 }
-impl<'f, Ct: 'static, Cf: 'static> ClearingMut<'f, Ct, Cf> {
+impl<'f, Ct, Cf> ClearingMut<'f, Ct, Cf> {
     /// Returns a `ClearingMut` on the specified `Field`, or `None` if the location has 1 or more neighboring mines or is out of bounds.
     pub fn new(field: &'f mut Field<Ct, Cf>, anchor_location: FieldCoordinates) -> Option<Self> {
         if field.get(anchor_location).is_some() {
@@ -572,7 +582,7 @@ impl<'f, Ct: 'static, Cf: 'static> ClearingMut<'f, Ct, Cf> {
         )
     }
 }
-impl<'f, Ct: 'static, Cf: 'static> From<ClearingMut<'f, Ct, Cf>> for Clearing<'f, Ct, Cf> {
+impl<'f, Ct, Cf> From<ClearingMut<'f, Ct, Cf>> for Clearing<'f, Ct, Cf> {
     fn from(op: ClearingMut<'f, Ct, Cf>) -> Self {
         Self {field: op.field, anchor_location: op.anchor_location}
     }

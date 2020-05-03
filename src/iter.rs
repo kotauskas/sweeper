@@ -40,7 +40,7 @@ use super::{
 /// assert_eq!(mine_tile.state, TileState::Mine(Flag::NotFlagged)); // It's a mine
 /// ```
 #[derive(Clone)]
-pub struct RowIter<'f, Ct: 'static, Cf: 'static> {
+pub struct RowIter<'f, Ct, Cf> {
     field: &'f Field<Ct, Cf>,
     row: usize,
     index: Range<usize>
@@ -70,7 +70,7 @@ impl<'f, Ct, Cf> RowIter<'f, Ct, Cf> {
     }
     /// Returns the field which the iterator iterates over.
     #[inline(always)]
-    pub fn field(&self) -> &'f Field<Ct, Cf> {
+    pub const fn field(&self) -> &'f Field<Ct, Cf> {
         self.field
     }
 }
@@ -144,7 +144,7 @@ impl<Ct, Cf> Index<usize> for RowIter<'_, Ct, Cf> {
 /// assert_eq!(mine_tile.state, TileState::Mine(Flag::NotFlagged)); // It's a mine
 /// ```
 #[derive(Clone)]
-pub struct ColumnIter<'f, Ct: 'static, Cf: 'static> {
+pub struct ColumnIter<'f, Ct, Cf> {
     field: &'f Field<Ct, Cf>,
     column: usize,
     index: Range<usize>
@@ -245,7 +245,7 @@ impl<Ct, Cf> Index<usize> for ColumnIter<'_, Ct, Cf> {
 /// assert_eq!(row_with_mine, Some(3)); // We indeed have found a mine in the 4th row.
 /// ```
 #[derive(Clone)]
-pub struct FieldRowsIter<'f, Ct: 'static, Cf: 'static> {
+pub struct FieldRowsIter<'f, Ct, Cf> {
     field: &'f Field<Ct, Cf>,
     index: Range<usize>
 }
@@ -311,7 +311,7 @@ impl<Ct, Cf> FusedIterator for FieldRowsIter<'_, Ct, Cf> {}
 /// assert_eq!(column_with_mine, Some(8)); // We indeed have found a mine in the 9th column.
 /// ```
 #[derive(Clone)]
-pub struct FieldColumnsIter<'f, Ct: 'static, Cf: 'static> {
+pub struct FieldColumnsIter<'f, Ct, Cf> {
     field: &'f Field<Ct, Cf>,
     index: Range<usize>
 }

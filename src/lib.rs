@@ -26,7 +26,6 @@
     clippy::doc_markdown, // It reacted to "OSDev", bruh?
     clippy::inline_always, // Shut up ik how to optimize stuff
     clippy::must_use_candidate, // no
-
 )]
 
 #![cfg_attr(feature = "track_caller", feature(track_caller))]

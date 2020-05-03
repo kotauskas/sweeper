@@ -35,7 +35,7 @@ use crate::{
 /// [m_open]: #method.open "open — opens exactly one tile and returns the outcome of clicking it"
 /// [m_chord]: #method.chord "chord — performs a chord operation on the specified tile"
 /// [m_rechord]: #method.recursive_chord "recursive_chord — performs a chord operation on the specified tile recursively, i.e. runs chords for all number tiles which were uncovered from chording"
-pub struct Field<Ct: 'static, Cf: 'static> {
+pub struct Field<Ct, Cf> {
     dimensions: FieldDimensions,
     storage: Vec<Tile<Ct, Cf>>,
 }
@@ -396,12 +396,12 @@ impl<Ct, Cf> Field<Ct, Cf> {
 
     /// Returns an iterator over the field's columns.
     #[inline(always)]
-    pub fn rows(&self) -> FieldRowsIter<'_, Ct, Cf> {
+    pub const fn rows(&self) -> FieldRowsIter<'_, Ct, Cf> {
         FieldRowsIter::new(self)
     }
     /// Returns an iterator over the field's columns.
     #[inline(always)]
-    pub fn columns(&self) -> FieldColumnsIter<'_, Ct, Cf> {
+    pub const fn columns(&self) -> FieldColumnsIter<'_, Ct, Cf> {
         FieldColumnsIter::new(self)
     }
     /// Returns a `Clearing` on the specified `Field`, or `None` if the location has 1 or more neighboring mines or is out of bounds.
@@ -559,7 +559,7 @@ where Ct: Deserialize<'de>,
 
         struct FieldVisitor<Ct, Cf>(PhantomData<(Ct, Cf)>);
 
-        impl<'de, Ct: 'static, Cf: 'static> Visitor<'de> for FieldVisitor<Ct, Cf>
+        impl<'de, Ct, Cf> Visitor<'de> for FieldVisitor<Ct, Cf>
         where Ct: Deserialize<'de>,
               Cf: Deserialize<'de> {
             type Value = Field<Ct, Cf>;
