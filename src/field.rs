@@ -28,6 +28,13 @@ use crate::{
 };
 
 /// Represents a playfield.
+///
+/// Fields in Minesweeper are matrices of [tiles][tile]. The winning condition is when all tiles without mines are opened. Sweeper doesn't automatically perform that: `Field` objects provide helpful methods which implementations call when the user performs certain input actions, like left-clicking a closed tile or right-clicking a number tile. The former typically maps to a call to [`open`][m_open], while the latter triggers either [`chord`][m_chord] or [`recursive_chord`][m_rechord], depending on user settings.
+///
+/// [tile]: struct.Tile.html "Tile — a tile on a Minesweeper field"
+/// [m_open]: #method.open "open — opens exactly one tile and returns the outcome of clicking it"
+/// [m_chord]: #method.chord "chord — performs a chord operation on the specified tile"
+/// [m_rechord]: #method.recursive_chord "recursive_chord — performs a chord operation on the specified tile recursively, i.e. runs chords for all number tiles which were uncovered from chording"
 pub struct Field<Ct: 'static, Cf: 'static> {
     dimensions: FieldDimensions,
     storage: Vec<Tile<Ct, Cf>>,
@@ -40,13 +47,17 @@ pub type FieldDimensions = [NonZeroUsize; 2];
 ///
 /// The first element specifies the column index (X coordinate), while the second one specifies the row index (Y coordinate). This is different from `FieldDimensions`, since the coordinate system starts from zero, i.e. the coordinates `[0, 0]` correspond to the top left corner and the only tile of a 1x1 field.
 pub type FieldCoordinates = [usize; 2];
-/// The outcome of a chord operation.
+/// The outcome of a [chord operation][m_chord].
 ///
 /// The entries are the adjacent & diagonal tiles in clockwise order, starting from top-left: ↖, ↑, ↗, →, ↘, ↓, ↙, ←.
+///
+/// [m_chord]: #method.chord "chord — performs a chord operation on the specified tile"
 pub type ChordOutcome = [ClickOutcome; 8];
-/// The outcome of one of the chords in a recursive chord operation.
+/// The outcome of one of the chords in a [recursive chord operation][m_rechord].
 ///
 /// The `Chord` variant of `ClickOutcome` does **not** require any processing — all chords reported by these have already been executed by the time the function finishes execution.
+///
+/// [m_rechord]: #method.recursive_chord "recursive_chord — performs a chord operation on the specified tile recursively, i.e. runs chords for all number tiles which were uncovered from chording"
 pub type RecursiveChordOutcome = (FieldCoordinates, ChordOutcome);
 impl<Ct: Default, Cf> Field<Ct, Cf> {
     /// Creates an empty field filled with unopened tiles, with the given dimensions.
@@ -242,9 +253,11 @@ impl<Ct, Cf> Field<Ct, Cf> {
             Some(outcome)
         } else {None}
     }
-    /// Performs a chord on the specified tile.
+    /// Performs a chord on the specified tile and returns the [outcomes][chord_outcome] for all 8 tiles touched.
     ///
-    /// Returns the oucomes for all 8 tiles touched.
+    /// Chord operations in Minesweeper are special convenience operations ran on number tiles. If the amount of mines around a number tile (displayed on its number) is exactly equal to the amount of flags around it, all other tiles can be opened, causing a gameover condition if the flags were placed incorrectly. This method performs just that: counts the surrounding flags and mines and opens the unflagged tiles if these two metrics match.
+    ///
+    /// [chord_outcome]: type.ChordOutcome.html "ChordOutcome — the outcome of a chord operation"
     #[allow(clippy::redundant_closure_call)] // This lint shall not be a thing.
     pub fn chord(&mut self, coordinates: FieldCoordinates) -> ChordOutcome {
         let (x, y) = (coordinates[0], coordinates[1]);
@@ -273,8 +286,8 @@ impl<Ct, Cf> Field<Ct, Cf> {
         ckflag([x - 1, y - 1]); // down-left,
         ckflag([x - 1, y    ]); // and left.
 
-        if num_flags < num_mines {
-            return result // We can't chord without enough flags.
+        if num_flags != num_mines {
+            return result // We can't chord without enough flags or with too many.
         };
 
         let calc_result = |coords: FieldCoordinates| {
@@ -393,9 +406,13 @@ impl<Ct, Cf> Field<Ct, Cf> {
         ClearingMut::<'_, Ct, Cf>::new(self, anchor_location)
     }
 
-    /// Calculates the smallest amount of clicks required to clear a field.
+    /// Calculates the 3BV value of the field.
+    ///
+    /// The Bechtel's Board Benchmark Value, or 3BV, is a way of measuring how difficult a Minesweeper field is. It is the smallest possible number of clicks which are required to win the field, ignoring all opportunities for chord operations to be able to calculate the value in a reasonable timespan. [Clearings][clearing] on a field add one point to this value per clearing. The remaining number tiles which are not surrounded by tiles without numbers also add one each. This metric favors players which do not use flags, but is still widely used nonetheless.
     ///
     /// Since the field is modified in an undefined way in the process, it is taken by value.
+    ///
+    /// [clearing]: struct.Clearing.html "Clearing — a clearing on the specified field"
     #[must_use = "calculating the 3BV value for any possible field requires traversing the entire field two times and opening clearings"]
     pub fn calculate_3bv(mut self) -> usize {
         let mut result = 0_usize;
@@ -425,7 +442,31 @@ impl<Ct, Cf> Field<Ct, Cf> {
                                     .open(true);
                                 result += 1;
                             },
-                            ClickOutcome::OpenNumber(_) => result += 1,
+                            ClickOutcome::OpenNumber(_) => {
+                                let belongs_to_a_clearing = |coords: FieldCoordinates| {
+                                    let mut result = false;
+                                    let mut cktile = |coords: FieldCoordinates| {
+                                        if let Some(tile) = self.get(coords) {
+                                            if let TileState::OpenEmpty = tile.state {result = true;}
+                                            else {}
+                                        } else {}
+                                    };
+                                    let [x, y] = coords;
+
+                                    cktile([x - 1, y + 1]); // Up-left,
+                                    cktile([x    , y + 1]); // up,
+                                    cktile([x + 1, y + 1]); // up-right,
+                                    cktile([x + 1, y    ]); // right,
+                                    cktile([x + 1, y - 1]); // down-right,
+                                    cktile([x    , y - 1]); // down,
+                                    cktile([x - 1, y - 1]); // down-left,
+                                    cktile([x - 1, y    ]); // and left.
+                                    result
+                                };
+                                if belongs_to_a_clearing([x, y]) {
+                                    result += 1;
+                                }
+                            },
                             _ => {}
                         };
                     },
