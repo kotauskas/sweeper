@@ -174,7 +174,7 @@ impl<'f, Ct, Cf> ColumnIter<'f, Ct, Cf> {
     }
     /// Returns the field which the iterator iterates over.
     #[inline(always)]
-    pub fn field(&self) -> &'f Field<Ct, Cf> {
+    pub const fn field(&self) -> &'f Field<Ct, Cf> {
         self.field
     }
 }
@@ -252,7 +252,7 @@ pub struct FieldRowsIter<'f, Ct: 'static, Cf: 'static> {
 impl<'f, Ct, Cf> FieldRowsIter<'f, Ct, Cf> {
     /// Returns an iterator over the specified field's rows.
     #[inline(always)]
-    pub fn new(field: &'f Field<Ct, Cf>) -> Self {
+    pub const fn new(field: &'f Field<Ct, Cf>) -> Self {
         Self {
             field, index: 0..field.dimensions()[1].get()
         }
@@ -318,7 +318,7 @@ pub struct FieldColumnsIter<'f, Ct: 'static, Cf: 'static> {
 impl<'f, Ct, Cf> FieldColumnsIter<'f, Ct, Cf> {
     /// Returns an iterator over the specified field's columns.
     #[inline(always)]
-    pub fn new(field: &'f Field<Ct, Cf>) -> Self {
+    pub const fn new(field: &'f Field<Ct, Cf>) -> Self {
         Self {
             field, index: 0..field.dimensions()[0].get()
         }

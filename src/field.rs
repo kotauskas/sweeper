@@ -81,6 +81,7 @@ impl<Ct, Cf> Field<Ct, Cf> {
     /// Keep in mind that indexing over fields is still done in column-major order.
     ///
     /// [rmo]: https://en.wikipedia.org/wiki/Row-_and_column-major_order "Row- and column-major order — Wikipedia"
+    #[must_use]
     pub fn from_dimensions_and_storage(dimensions: FieldDimensions, storage: Vec<Tile<Ct, Cf>>) -> Option<Self> {
         let area = dimensions[0].get() * dimensions[1].get();
         if storage.len() == area {
@@ -91,14 +92,21 @@ impl<Ct, Cf> Field<Ct, Cf> {
     }
     /// Adds mines with the selected percentage of mines and, optionally, a safe spot, which can never have any surrounding mines.
     #[cfg(feature = "generation")]
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_precision_loss)]
     pub fn populate(&mut self, mine_percentage: f64, safe_spot: Option<FieldCoordinates>) {
         use rand::Rng;
+        assert!(mine_percentage > 0.0); // no
         let mut rng = rand::thread_rng();
 
         let (width, height) = (self.dimensions[0].get(), self.dimensions[1].get());
 
         let area = width * height;
         let num_mines: usize = (area as f64 * mine_percentage).round() as usize; // The number of mines is usize because the area is usize.
+        if safe_spot.is_some() {
+            assert!(area > num_mines);
+        } else {
+            assert!(area >= num_mines);
+        }
 
         // We're using loop+counter instead of a range because we don't want to just discard a mine if it collides with the safe spot. Instead, we're going to
         // skip over the decrement and retry. This might freeze the game if the RNG chooses to hit the safe spot multiple times, but that's so unlikely that

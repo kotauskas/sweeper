@@ -186,8 +186,8 @@ impl<Cf> TileState<Cf> {
     #[inline]
     pub fn flag_state(&self) -> Option<&Flag<Cf>> {
         match self {
-            Self::ClosedEmpty(flag) => Some(flag),
-            Self::Mine(flag) => Some(flag),
+            Self::ClosedEmpty(flag)
+          | Self::Mine(flag) => Some(flag),
             _ => None
         }
     }
@@ -457,7 +457,7 @@ impl<'f, Ct: 'static, Cf: 'static> Clearing<'f, Ct, Cf> {
     ///
     /// This can be any location inside the clearing. More specifically, the one used during creation is returned.
     #[inline(always)]
-    pub fn anchor_location(self) -> FieldCoordinates { self.anchor_location }
+    pub const fn anchor_location(self) -> FieldCoordinates { self.anchor_location }
 
     /// Executes the specified closure on every tile inside the clearing. Optionally can include the "shore" (tiles with numbers) as a part of the clearing.
     ///
@@ -507,12 +507,12 @@ impl<'f, Ct: 'static, Cf: 'static> ClearingMut<'f, Ct, Cf> {
     }
     /// Returns the field on which this clearing is located.
     #[inline(always)]
-    pub fn field(self) -> &'f Field<Ct, Cf> { self.field }
+    pub const fn field(self) -> &'f Field<Ct, Cf> { self.field }
     /// Returns the location around which this clearing is formed.
     ///
     /// This can be any location inside the clearing. More specifically, the one used during creation is returned.
     #[inline(always)]
-    pub fn anchor_location(self) -> FieldCoordinates { self.anchor_location }
+    pub const fn anchor_location(self) -> FieldCoordinates { self.anchor_location }
 
     /// Executes the specified closure on every tile inside the clearing. Optionally can include the "shore" (tiles with numbers) as a part of the clearing.
     ///
