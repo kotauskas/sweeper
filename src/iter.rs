@@ -39,7 +39,7 @@ use super::{
 ///     .unwrap(); // Get rid of the Option wrap
 /// assert_eq!(mine_tile.state, TileState::Mine(Flag::NotFlagged)); // It's a mine
 /// ```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RowIter<'f, Ct, Cf> {
     field: &'f Field<Ct, Cf>,
     row: usize,

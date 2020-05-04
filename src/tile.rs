@@ -22,18 +22,21 @@ use super::{
 /// A tile on a Minesweeper field.
 ///
 /// This groups the state of the tile and the custom payload.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Tile<Ct, Cf> {
     /// The state of the tile. See the `TileState` enum for an explanation of what exactly does this field store.
     pub state: TileState<Cf>,
     /// The custom payload. Typically `()` for implementations which use a low-level rendering library, like SDL2, or the entity type for implementations which use an entity-component-system architecture.
     pub payload: Ct
 }
-impl<Ct: Default, Cf> From<TileState<Cf>> for Tile<Ct, Cf> {
+impl<Ct, Cf> From<TileState<Cf>> for Tile<Ct, Cf>
+where Ct: Default {
     fn from(state: TileState<Cf>) -> Self {
         Self { state, payload: Ct::default() }
     }
 }
-impl<Ct: Default, Cf> Default for Tile<Ct, Cf> {
+impl<Ct, Cf> Default for Tile<Ct, Cf>
+where Ct: Default {
     /// Returns the default value both the payload and the state.
     fn default() -> Self {
         Self {
@@ -199,6 +202,14 @@ impl<Cf> TileState<Cf> {
             else { false }
         } else { false }
     }
+    /// Returns the custom flag value if the tile can hold a flag and the installed flag is a custom one, `None` otherwise.
+    #[inline]
+    pub fn custom_flag(&self) -> Option<&Cf> {
+        if let Some(flag) = self.flag_state() {
+            if let Flag::Custom(cf) = flag { Some(cf) }
+            else { None }
+        } else { None }
+    }
     /// Returns a [`ClickOutcome`][co] from the data known only to this specific tile, or `None` if returning one requires access to the field.
     ///
     /// [co]: enum.ClickOutcome.html "ClickOutcome — the event produced after clicking a tile"
@@ -244,7 +255,8 @@ impl<Cf> PartialEq<TileState<Cf>> for TileState<Cf> {
 impl<Cf> Eq for TileState<Cf> {}
 
 #[cfg(feature = "serialization")]
-impl<Cf: Serialize> Serialize for TileState<Cf> {
+impl<Cf> Serialize for TileState<Cf>
+where Cf: Serialize {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         match self {
             Self::ClosedEmpty(flag) => {
@@ -269,7 +281,8 @@ impl<Cf: Serialize> Serialize for TileState<Cf> {
     }
 }
 #[cfg(feature = "serialization")]
-impl<'de, Cf: Deserialize<'de>> Deserialize<'de> for TileState<Cf> {
+impl<'de, Cf> Deserialize<'de> for TileState<Cf>
+where Cf: Deserialize<'de> {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         const VARIANTS: &[&str] = &["ClosedEmpty", "OpenEmpty", "OpenNumber", "Mine"];
         #[derive(Deserialize)]
@@ -440,7 +453,6 @@ macro_rules! for_every_tile {
 /// This structure consists of two elements which define a clearing on a field: a reference to the field and an **anchor location**. The former is self explanatory; the latter is the coordinates of a tile on a field which belongs to the clearing we want to refer to. Locating all tiles in a clearing uses a `Vec`-based recursive fill algorithm which starts from that exact location.
 ///
 /// [img_clearing]: https://i.imgur.com/8KySLVj.png " "
-#[derive(Copy, Clone)]
 pub struct Clearing<'f, Ct, Cf> {
     field: &'f Field<Ct, Cf>,
     anchor_location: FieldCoordinates
@@ -493,6 +505,12 @@ impl<'f, Ct, Cf> Clearing<'f, Ct, Cf> {
         includes
     }
 }
+impl<Ct, Cf> Copy for Clearing<'_, Ct, Cf> {}
+impl<Ct, Cf> Clone for Clearing<'_, Ct, Cf> {
+    #[inline(always)]
+    fn clone(&self) -> Self { *self }
+}
+
 /// A **mutable** reference to a clearing on the specified field.
 ///
 /// See the documentation for the [immutable version] for an explanation of what is a clearing and how this structure works.
@@ -615,7 +633,8 @@ impl<Cf> From<Cf> for Flag<Cf> {
     }
 }
 #[cfg(feature = "serialization")]
-impl<Cf: Serialize> Serialize for Flag<Cf> {
+impl<Cf> Serialize for Flag<Cf>
+where Cf: Serialize {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         let (variant, variant_index, len) = match self {
             Self::NotFlagged => ("NotFlagged", 0, 0),
@@ -632,7 +651,8 @@ impl<Cf: Serialize> Serialize for Flag<Cf> {
     }
 }
 #[cfg(feature = "serialization")]
-impl<'de, Cf: Deserialize<'de>> Deserialize<'de> for Flag<Cf> {
+impl<'de, Cf> Deserialize<'de> for Flag<Cf>
+where Cf: Deserialize<'de> {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         const VARIANTS: &[&str] = &["NotFlagged", "Flagged", "Custom"];
         #[derive(Deserialize)]

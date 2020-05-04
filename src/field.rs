@@ -35,10 +35,13 @@ use crate::{
 /// [m_open]: #method.open "open — opens exactly one tile and returns the outcome of clicking it"
 /// [m_chord]: #method.chord "chord — performs a chord operation on the specified tile"
 /// [m_rechord]: #method.recursive_chord "recursive_chord — performs a chord operation on the specified tile recursively, i.e. runs chords for all number tiles which were uncovered from chording"
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Field<Ct, Cf> {
     dimensions: FieldDimensions,
     storage: Vec<Tile<Ct, Cf>>,
 }
+/// A field without any custom tile data or custom flags, typically used for serialization of fields without custom flags.
+pub type SimpleField = Field<(), ()>;
 /// The dimensions of a field.
 ///
 /// The first element specifies the width (the number of columns), while the second one specifies the height (number of rows). As required by `NonZeroUsize`, a field cannot be smaller than 1x1.
@@ -51,15 +54,16 @@ pub type FieldCoordinates = [usize; 2];
 ///
 /// The entries are the adjacent & diagonal tiles in clockwise order, starting from top-left: ↖, ↑, ↗, →, ↘, ↓, ↙, ←.
 ///
-/// [m_chord]: #method.chord "chord — performs a chord operation on the specified tile"
+/// [m_chord]: struct.Field.html#method.chord "chord — performs a chord operation on the specified tile"
 pub type ChordOutcome = [ClickOutcome; 8];
 /// The outcome of one of the chords in a [recursive chord operation][m_rechord].
 ///
 /// The `Chord` variant of `ClickOutcome` does **not** require any processing — all chords reported by these have already been executed by the time the function finishes execution.
 ///
-/// [m_rechord]: #method.recursive_chord "recursive_chord — performs a chord operation on the specified tile recursively, i.e. runs chords for all number tiles which were uncovered from chording"
+/// [m_rechord]: struct.Field.html#method.recursive_chord "recursive_chord — performs a chord operation on the specified tile recursively, i.e. runs chords for all number tiles which were uncovered from chording"
 pub type RecursiveChordOutcome = (FieldCoordinates, ChordOutcome);
-impl<Ct: Default, Cf> Field<Ct, Cf> {
+impl<Ct, Cf> Field<Ct, Cf>
+where Ct: Default {
     /// Creates an empty field filled with unopened tiles, with the given dimensions.
     #[inline]
     #[must_use = "this performs a memory allocation as big as the area of the field"]
@@ -76,6 +80,22 @@ impl<Ct: Default, Cf> Field<Ct, Cf> {
     }
 }
 impl<Ct, Cf> Field<Ct, Cf> {
+    /// Removes all `payload`s from all contained tiles and returns a version of the field with `()` as the custom tile data.
+    ///
+    /// This is primarily useful when the custom tile data stores runtime-specific information, like the corresponding entities in an entity-component-system architecture or such.
+    pub fn remove_tile_payload(self) -> Field<(), Cf> {
+        let dimensions = self.dimensions;
+        let area = dimensions[0].get() * dimensions[1].get();
+        let mut resulting_storage = Vec::with_capacity(area);
+        for tile in self.into_tiles() {
+            resulting_storage.push(
+                Tile {state: tile.state, payload: ()} // Retain the original state but discard the payload.
+            );
+        }
+        Field::<(), Cf>::from_dimensions_and_storage(dimensions, resulting_storage)
+            .unwrap_or_else(|| unreachable!("the length of the backing storage should've matched the area but it didn't, this shouldn't be possible"))
+    }
+
     /// Creates a field with the specified dimensions from the specified `Vec` of tiles, given in [row-major order][rmo].
     ///
     /// Keep in mind that indexing over fields is still done in column-major order.
@@ -139,22 +159,16 @@ impl<Ct, Cf> Field<Ct, Cf> {
     #[must_use = "traversing the entire field is obscenely expensive"]
     pub fn count_open_tiles(&self) -> usize {
         let mut count = 0_usize;
-        for column in self.columns() {
-            for tile in column {
-                if tile.state.is_open() {count += 1};
-            }
-        }
+        self.all_tiles()
+            .for_each(|tile| if tile.state.is_open() {count += 1});
         count
     }
     /// Returns the amount of tiles which have not been opened yet.
     #[must_use = "traversing the entire field is obscenely expensive"]
     pub fn count_closed_tiles(&self) -> usize {
         let mut count = 0_usize;
-        for column in self.columns() {
-            for tile in column {
-                if tile.state.is_closed() {count += 1};
-            }
-        }
+        self.all_tiles()
+            .for_each(|tile| if tile.state.is_closed() {count += 1});
         count
     }
     /// Returns the amount of tiles which the player needs to open in order to win the game.
@@ -163,11 +177,20 @@ impl<Ct, Cf> Field<Ct, Cf> {
     #[must_use = "traversing the entire field is obscenely expensive"]
     pub fn tiles_to_open(&self) -> usize {
         let mut count = 0_usize;
-        for column in self.columns() {
-            for tile in column {
-                if tile.state.is_required_to_open() {count += 1};
-            }
-        }
+        self.all_tiles()
+            .for_each(|tile| if tile.state.is_required_to_open() {count += 1});
+        count
+    }
+    /// Returns the amount of unflagged mines left on the field. This information is typically displayed to the player on a UI panel alongside with the time spent on the field.
+    #[must_use = "traversing the entire field is obscenely expensive"]
+    pub fn unflagged_mines_left(&self, include_custom: bool) -> usize {
+        let mut count = 0_usize;
+        self.all_tiles()
+            .for_each(|tile|
+                if tile.state.is_flagged() {count += 1}
+                else if include_custom
+                && tile.state.custom_flag().is_some() {count += 1}
+            );
         count
     }
     /// Counts all neigboring mines around a spot.
@@ -323,6 +346,7 @@ impl<Ct, Cf> Field<Ct, Cf> {
     /// Performs a chord on the specified tile recursively, i.e. runs chords for all number tiles which were uncovered from chording.
     ///
     /// The returned value contains one entry per chord operation
+    #[must_use = "recursive chords incur a heapstack allocation and are generally slow"]
     pub fn recursive_chord(&mut self, index: FieldCoordinates) -> Vec<RecursiveChordOutcome> {
         // Similar to the clearing algorithm, we're using a stack frame type here.
         // The meanings of values are pretty similar to the ones seen there.
@@ -410,8 +434,30 @@ impl<Ct, Cf> Field<Ct, Cf> {
         Clearing::<'_, Ct, Cf>::new(self, anchor_location)
     }
     /// Returns a `ClearingMut` on the specified `Field`, or `None` if the location has 1 or more neighboring mines or is out of bounds.
+    #[inline(always)]
     pub fn clearing_mut(&mut self, anchor_location: FieldCoordinates) -> Option<ClearingMut<Ct, Cf>> {
         ClearingMut::<'_, Ct, Cf>::new(self, anchor_location)
+    }
+    /// Returns an iterator over all tiles in the field.
+    ///
+    /// The iterator runs in row-major order, even though the indexing happens as column-major.
+    #[inline(always)]
+    pub fn all_tiles(&self) -> core::slice::Iter<'_, Tile<Ct, Cf>> {
+        self.storage.iter()
+    }
+    /// Returns a mutable iterator over all tiles in the field.
+    ///
+    /// The iterator runs in row-major order, even though the indexing happens as column-major.
+    #[inline(always)]
+    pub fn all_tiles_mut(&mut self) -> core::slice::IterMut<'_, Tile<Ct, Cf>>{
+        self.storage.iter_mut()
+    }
+    /// Consumes the field and returns the underlying storage for the tiles.
+    ///
+    /// The tiles are stored in row-major order, i.e. the tile in the second column of a row goes right after the tile in the first column, and so on.
+    #[inline(always)]
+    fn into_tiles(self) -> Vec<Tile<Ct, Cf>> {
+        self.storage
     }
 
     /// Calculates the 3BV value of the field.
@@ -488,7 +534,7 @@ impl<Ct, Cf> Field<Ct, Cf> {
 }
 impl<Ct, Cf> Index<FieldCoordinates> for Field<Ct, Cf> {
     type Output = Tile<Ct, Cf>;
-    /// Returns the tile at the column `index.0` and row `index.1`, both starting at zero.
+    /// Returns the tile at the column `index[0]` and row `index[1]` (i.e. the indexing happens in column-major order), both starting at zero.
     ///
     /// # Panics
     /// Index checking is enabled for this method. For a version which returns an `Option` instead of panicking if the index is out of bounds, see `get`.
@@ -499,7 +545,7 @@ impl<Ct, Cf> Index<FieldCoordinates> for Field<Ct, Cf> {
 }
 impl<Ct, Cf> IndexMut<FieldCoordinates> for Field<Ct, Cf> {
     #[inline(always)]
-    /// Returns the tile at the column `index.0` and row `index.1`, both starting at zero.
+    /// Returns the tile at the column `index[0]` and row `index[1]` (i.e. the indexing happens in column-major order), both starting at zero.
     ///
     /// # Panics
     /// Index checking is enabled for this method. For a version which returns an `Option` instead of panicking if the index is out of bounds, see `get_mut`.
