@@ -83,6 +83,7 @@ impl<Ct, Cf> Field<Ct, Cf> {
     /// Removes all `payload`s from all contained tiles and returns a version of the field with `()` as the custom tile data.
     ///
     /// This is primarily useful when the custom tile data stores runtime-specific information, like the corresponding entities in an entity-component-system architecture or such.
+    #[allow(clippy::use_self)]
     pub fn remove_tile_payload(self) -> Field<(), Cf> {
         let dimensions = self.dimensions;
         let area = dimensions[0].get() * dimensions[1].get();
@@ -187,9 +188,9 @@ impl<Ct, Cf> Field<Ct, Cf> {
         let mut count = 0_usize;
         self.all_tiles()
             .for_each(|tile|
-                if tile.state.is_flagged() {count += 1}
-                else if include_custom
-                && tile.state.custom_flag().is_some() {count += 1}
+                if tile.state.is_flagged()
+                || (include_custom
+                && tile.state.custom_flag().is_some()) {count += 1}
             );
         count
     }
@@ -456,6 +457,7 @@ impl<Ct, Cf> Field<Ct, Cf> {
     ///
     /// The tiles are stored in row-major order, i.e. the tile in the second column of a row goes right after the tile in the first column, and so on.
     #[inline(always)]
+    #[allow(clippy::missing_const_for_fn)]
     fn into_tiles(self) -> Vec<Tile<Ct, Cf>> {
         self.storage
     }
